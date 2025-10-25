@@ -9,6 +9,8 @@ import '../../providers/catalog_provider.dart';
 import '../../models/restaurant_model.dart';
 import '../../widgets/common/restaurant_card.dart';
 import '../../widgets/common/product_card.dart';
+import '../categories/categories_page.dart';
+import '../restaurant/restaurant_detail_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -490,27 +492,21 @@ class _HomePageState extends State<HomePage> {
                   final restaurant = filteredRestaurants[index];
                   
                   return SizedBox(
-                    width: 200,
-                    child: Hero(
-                      tag: 'restaurant-${restaurant.id}',
-                      child: RestaurantCard(
-                        title: restaurant.displayTitle,
-                        subtitle: restaurant.displaySubtitle.isNotEmpty
-                            ? restaurant.displaySubtitle
-                            : 'Endereço indisponível',
-                        imageUrl: restaurant.displayImage ??
-                            'https://images.unsplash.com/photo-1544025162-d76694265947?w=1200',
-                        rating: 4.5,
-                        onTap: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Abrindo ${restaurant.name}...'),
-                              backgroundColor: const Color(0xFF045146),
+                    width: 260,
+                    child: RestaurantCard(
+                      restaurant: restaurant,
+                      width: 260,
+                      height: 160,
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => RestaurantDetailPage(
+                              restaurant: restaurant,
                             ),
-                          );
-                          // TODO: Navegar para RestaurantDetailPage
-                        },
-                      ),
+                          ),
+                        );
+                      },
                     ),
                   );
                 },
@@ -988,13 +984,12 @@ class _HomePageState extends State<HomePage> {
                     ),
                     secondChild: TextButton.icon(
                       onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Navegando para categorias...'),
-                            backgroundColor: Color(0xFF74241F),
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const CategoriesPage(),
                           ),
                         );
-                        // TODO: Navegar para _WineCategoriesPage
                       },
                       icon: const Icon(
                         Icons.restaurant_menu,

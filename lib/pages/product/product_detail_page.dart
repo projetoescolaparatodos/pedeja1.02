@@ -29,8 +29,6 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
 
   Future<void> _loadProductData() async {
     try {
-      print('🔍 Buscando dados do produto ${widget.product.id} da API...');
-
       final url =
           'https://api-pedeja.vercel.app/api/restaurants/${widget.product.restaurantId}/products';
       final response = await http.get(Uri.parse(url));
@@ -48,13 +46,9 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
             _productData = productData as Map<String, dynamic>;
             _isLoading = false;
           });
-          print('✅ Dados carregados: ${productData['name']}');
-          print('   - badges: ${productData['badges']}');
-          print('   - addons: ${productData['addons']}');
         }
       }
     } catch (e) {
-      print('⚠️ Erro ao carregar produto: $e');
       setState(() => _isLoading = false);
     }
   }

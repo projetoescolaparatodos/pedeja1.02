@@ -13,6 +13,8 @@ import '../categories/categories_page.dart';
 import '../restaurant/restaurant_detail_page.dart';
 import '../../state/cart_state.dart';
 import '../cart/cart_page.dart';
+import '../../state/user_state.dart';
+import '../profile/complete_profile_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -951,14 +953,16 @@ class _HomePageState extends State<HomePage> {
                   color: Colors.black.withValues(alpha: 0.3),
                   shape: BoxShape.circle,
                 ),
-                child: IconButton(
-                  icon: const Icon(
-                    Icons.menu,
-                    color: Color(0xFFE39110),
+                child: Builder(
+                  builder: (ctx) => IconButton(
+                    icon: const Icon(
+                      Icons.menu,
+                      color: Color(0xFFE39110),
+                    ),
+                    onPressed: () {
+                      Scaffold.of(ctx).openDrawer();
+                    },
                   ),
-                  onPressed: () {
-                    Scaffold.of(context).openDrawer();
-                  },
                 ),
               ),
               
@@ -1148,6 +1152,23 @@ class _HomePageState extends State<HomePage> {
                       icon: Icons.favorite,
                       title: 'Favoritos',
                       onTap: () {},
+                    ),
+                    _buildDrawerItem(
+                      icon: Icons.person,
+                      title: '🧪 Testar Cadastro',
+                      onTap: () async {
+                        final userState = context.read<UserState>();
+                        await userState.mockLogin();
+                        if (mounted) {
+                          Navigator.pop(context);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const CompleteProfilePage(),
+                            ),
+                          );
+                        }
+                      },
                     ),
                     _buildDrawerItem(
                       icon: Icons.receipt_long,

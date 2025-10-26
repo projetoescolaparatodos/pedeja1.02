@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../state/cart_state.dart';
+import '../../state/user_state.dart';
 import '../../models/cart_item.dart';
+import '../profile/complete_profile_page.dart';
+import '../checkout/checkout_page.dart';
 
 class CartPage extends StatelessWidget {
   const CartPage({super.key});
@@ -362,15 +365,7 @@ class CartPage extends StatelessWidget {
                 width: double.infinity,
                 height: 54,
                 child: ElevatedButton(
-                  onPressed: () {
-                    // TODO: Implementar checkout
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('🚀 Checkout em desenvolvimento...'),
-                        backgroundColor: Color(0xFF74241F),
-                      ),
-                    );
-                  },
+                  onPressed: () => _processCheckout(context),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF74241F), // Vinho
                     foregroundColor: Colors.white,
@@ -410,4 +405,229 @@ class CartPage extends StatelessWidget {
       ),
     );
   }
+
+  /// 🔍 Processa checkout com validação de perfil completo
+  static Future<void> _processCheckout(BuildContext context) async {
+    debugPrint('🛒 [CHECKOUT] Iniciando processo de checkout');
+    
+    final userState = context.read<UserState>();
+
+    // 📡 Garantir que dados do usuário estão carregados
+    if (userState.userData == null) {
+      debugPrint('⚠️ [CHECKOUT] userData null - carregando...');
+      
+      // Mostra loading
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => const Center(
+          child: CircularProgressIndicator(
+            valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFE39110)),
+          ),
+        ),
+      );
+
+      // Simula login (substitua por autenticação real)
+      await userState.mockLogin();
+
+      if (context.mounted) {
+        Navigator.pop(context); // Fecha loading
+        debugPrint('✅ [CHECKOUT] userData carregado');
+      }
+    }
+
+    if (!context.mounted) {
+      debugPrint('❌ [CHECKOUT] Context não está mounted - abortando');
+      return;
+    }
+
+    // 🔍 VALIDAÇÃO: Verifica se perfil está completo
+    debugPrint('🔍 [CHECKOUT] Validando perfil...');
+    debugPrint('📋 [CHECKOUT] isProfileComplete: ${userState.isProfileComplete}');
+    debugPrint('📋 [CHECKOUT] Campos faltantes: ${userState.missingFields}');
+    
+    if (!userState.isProfileComplete) {
+      debugPrint('⚠️ [CHECKOUT] Perfil incompleto - mostrando diálogo');
+      
+      // ⚠️ NÃO fecha o carrinho ainda - mostra dialog primeiro
+      debugPrint('📢 [CHECKOUT] Mostrando dialog de campos faltantes');
+      
+      // Mostra diálogo explicativo
+      final shouldProceed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          backgroundColor: const Color(0xFF0D3B3B),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: const BorderSide(color: Color(0xFFE39110), width: 2),
+          ),
+          title: const Row(
+            children: [
+              Icon(Icons.warning_amber_rounded,
+                  color: Color(0xFFE39110), size: 28),
+              SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Cadastro Incompleto',
+                  style: TextStyle(
+                    color: Color(0xFFE39110),
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Para finalizar seu pedido, precisamos que você complete seu cadastro com:',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  height: 1.5,
+                ),
+              ),
+              const SizedBox(height: 12),
+              ...userState.missingFields.map((field) => Padding(
+                    padding: const EdgeInsets.only(left: 16, top: 4),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.circle,
+                            size: 6, color: Color(0xFFE39110)),
+                        const SizedBox(width: 8),
+                        Text(
+                          field,
+                          style: const TextStyle(
+                            color: Color(0xFFE39110),
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )),
+              const SizedBox(height: 16),
+              const Text(
+                'Deseja completar agora?',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text(
+                'Agora não',
+                style: TextStyle(color: Colors.white70),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFE39110),
+                foregroundColor: Colors.white,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: const Text(
+                'Completar Cadastro',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+      );
+
+      debugPrint('📊 [CHECKOUT] Dialog retornou: $shouldProceed');
+      
+      // Se usuário aceitar, navega para tela de cadastro
+      if (shouldProceed == true) {
+        debugPrint('✅ [CHECKOUT] Usuário aceitou completar cadastro');
+        
+        if (!context.mounted) {
+          debugPrint('❌ [CHECKOUT] Context perdido após dialog');
+          return;
+        }
+        
+        // 🔙 AGORA SIM: Fecha o carrinho antes de navegar
+        Navigator.pop(context);
+        debugPrint('🔙 [CHECKOUT] Carrinho fechado');
+        
+        // Pequeno delay para garantir que a animação do carrinho terminou
+        await Future.delayed(const Duration(milliseconds: 200));
+        
+        if (!context.mounted) {
+          debugPrint('❌ [CHECKOUT] Context perdido após fechar carrinho');
+          return;
+        }
+        
+        // Debug: confirma navegação
+        debugPrint('🚀 [CHECKOUT] Navegando para CompleteProfilePage...');
+        
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const CompleteProfilePage(),
+          ),
+        );
+        
+        // Debug: retornou da tela
+        debugPrint('🔙 [CHECKOUT] Retornou de CompleteProfilePage');
+      } else {
+        debugPrint('❌ [CHECKOUT] Usuário cancelou completar cadastro');
+        // Usuário cancelou - mantém o carrinho aberto
+      }
+
+      debugPrint('⛔ [CHECKOUT] Interrompendo checkout (perfil incompleto)');
+      return; // ⛔ Interrompe checkout
+    }
+
+    debugPrint('✅ [CHECKOUT] Perfil completo - prosseguindo...');
+    
+    // ✅ Perfil completo → Continua com checkout
+    Navigator.pop(context); // Fecha carrinho
+
+    await Future.delayed(const Duration(milliseconds: 100));
+
+    if (!context.mounted) return;
+
+    // 🚀 Navegar para tela de checkout com pagamento
+    final cartState = context.read<CartState>();
+    
+    // Verificar se há itens no carrinho
+    if (cartState.items.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Carrinho vazio'),
+          backgroundColor: Color(0xFF74241F),
+        ),
+      );
+      return;
+    }
+
+    // Pegar dados do restaurante (primeiro item do carrinho)
+    final firstItem = cartState.items.first;
+    final restaurantId = firstItem.restaurantId;
+    final restaurantName = firstItem.restaurantName ?? 'Restaurante';
+
+    // Navegar para checkout
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => CheckoutPage(
+          restaurantId: restaurantId,
+          restaurantName: restaurantName,
+        ),
+      ),
+    );
+  }
 }
+

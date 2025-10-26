@@ -1,11 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
 import 'providers/catalog_provider.dart';
 import 'state/cart_state.dart';
-import 'pages/home/home_page.dart';
+import 'state/user_state.dart';
+import 'state/auth_state.dart';
+import 'pages/onboarding/onboarding_page.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  // 🔥 Inicializar Firebase
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+  
+  debugPrint('🔥 Firebase inicializado com sucesso');
+  
   runApp(const MyApp());
 }
 
@@ -16,8 +29,10 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
+        ChangeNotifierProvider(create: (_) => AuthState()), // 🔐 Autenticação
         ChangeNotifierProvider(create: (_) => CatalogProvider()),
         ChangeNotifierProvider(create: (_) => CartState()),
+        ChangeNotifierProvider(create: (_) => UserState()),
       ],
       child: MaterialApp(
         title: 'PedeJá',
@@ -44,7 +59,7 @@ class MyApp extends StatelessWidget {
             ),
           ),
         ),
-        home: const HomePage(),
+        home: const OnboardingPage(),
       ),
     );
   }

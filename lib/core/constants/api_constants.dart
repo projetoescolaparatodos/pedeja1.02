@@ -1,6 +1,13 @@
 ﻿class ApiConstants {
+  // 🔧 DESENVOLVIMENTO: Troque para true para usar proxy CORS local
+  // Execute: node cors-proxy.js
+  static const bool _useLocalProxy = false;
+  
   // Base URL da API
-  static const String baseUrl = 'https://api-pedeja.vercel.app';
+  static const String _productionUrl = 'https://api-pedeja.vercel.app';
+  static const String _proxyUrl = 'http://localhost:8080';
+  
+  static String get baseUrl => _useLocalProxy ? _proxyUrl : _productionUrl;
   
   // Endpoints de Auth
   static const String authLogin = '/api/auth/login';

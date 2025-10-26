@@ -33,6 +33,14 @@ dependencies:
   # Storage
   shared_preferences: ^2.5.0
   path_provider: ^2.1.0
+  
+  # Firebase (Autenticação e Database)
+  firebase_core: ^3.10.0
+  firebase_auth: ^5.3.3
+  cloud_firestore: ^5.5.2
+  
+  # URL Launcher (Mercado Pago Checkout)
+  url_launcher: ^6.2.2
 
 dev_dependencies:
   flutter_test:

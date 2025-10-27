@@ -7,7 +7,6 @@ import '../core/constants/api_constants.dart';
 /// 🔐 Serviço de Autenticação integrado com Firebase + API Backend
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
-  final String _apiUrl = ApiConstants.baseUrl;
 
   String? _jwtToken;
   Map<String, dynamic>? _userData;

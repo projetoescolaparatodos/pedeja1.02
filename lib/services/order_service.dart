@@ -159,13 +159,13 @@ class OrderService {
     try {
       await _firestore.collection('orders').doc(orderId).update({
         'payment': {
-          'id': payment.id,
-          'status': payment.status.toString().split('.').last,
           'method': payment.method,
-          'amount': payment.amount,
-          'paidAt': payment.paidAt?.toIso8601String(),
+          'provider': payment.provider,
+          'status': payment.status,
+          'transactionId': payment.transactionId,
+          'initPoint': payment.initPoint,
         },
-        'paymentStatus': payment.status.toString().split('.').last,
+        'paymentStatus': payment.status,
         'updatedAt': FieldValue.serverTimestamp(),
       });
       
@@ -175,9 +175,18 @@ class OrderService {
       rethrow;
     }
   }
-}
   
+  /// Cancelar pedido
   Future<void> cancelOrder(String orderId) async {
-    debugPrint('⚠️ Firebase desabilitado - cancelOrder simulado');
+    try {
+      await updateOrderStatus(
+        orderId: orderId,
+        status: models.OrderStatus.cancelled,
+      );
+      debugPrint('✅ [OrderService] Pedido cancelado: $orderId');
+    } catch (e) {
+      debugPrint('❌ [OrderService] Erro ao cancelar pedido: $e');
+      rethrow;
+    }
   }
 }

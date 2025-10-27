@@ -1,5 +1,4 @@
-// TEMPORARIAMENTE DESABILITADO - Firebase incompatível
-// import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 /// Modelo de item do pedido
 class OrderItem {
@@ -22,7 +21,7 @@ class OrderItem {
   double get totalPrice {
     final addonsTotal = addons.fold<double>(
       0,
-      (sum, addon) => sum + addon.price,
+      (total, addon) => total + addon.price,
     );
     return (price + addonsTotal) * quantity;
   }
@@ -131,13 +130,10 @@ class Order {
     };
   }
 
-  // TEMPORARIAMENTE DESABILITADO - Firebase incompatível
-  /*
-  factory Order.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
-    
+  /// Criar Order a partir de documento do Firestore
+  factory Order.fromFirestore(Map<String, dynamic> data, String id) {
     return Order(
-      id: doc.id,
+      id: id,
       restaurantId: data['restaurantId'] ?? '',
       restaurantName: data['restaurantName'] ?? '',
       userId: data['userId'] ?? '',
@@ -156,7 +152,6 @@ class Order {
           : null,
     );
   }
-  */
 }
 
 /// Status do pedido

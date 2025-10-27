@@ -124,6 +124,8 @@ class _CompleteProfilePageState extends State<CompleteProfilePage> {
           'updatedAt': DateTime.now().toIso8601String(),
         });
 
+        if (!mounted) return;
+
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('✅ Cadastro completado com sucesso!'),
@@ -138,6 +140,8 @@ class _CompleteProfilePageState extends State<CompleteProfilePage> {
         );
       } else {
         final error = authState.error ?? 'Erro ao salvar dados';
+        
+        if (!mounted) return;
         
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

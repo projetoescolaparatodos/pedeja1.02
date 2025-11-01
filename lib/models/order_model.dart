@@ -85,6 +85,8 @@ class Order {
   final String restaurantName;
   final String userId;
   final String userEmail;
+  final String? userName;      // ✨ NOVO
+  final String? userPhone;     // ✨ NOVO
   final List<OrderItem> items;
   final double total;
   final String deliveryAddress;
@@ -99,6 +101,8 @@ class Order {
     required this.restaurantName,
     required this.userId,
     required this.userEmail,
+    this.userName,
+    this.userPhone,
     required this.items,
     required this.total,
     required this.deliveryAddress,
@@ -115,6 +119,8 @@ class Order {
       'restaurantName': restaurantName,
       'userId': userId,
       'userEmail': userEmail,
+      'userName': userName,       // ✨ NOVO
+      'userPhone': userPhone,     // ✨ NOVO
       'items': items.map((item) => item.toMap()).toList(),
       'total': total,
       'totalAmount': total, // Compatibilidade com API
@@ -138,19 +144,76 @@ class Order {
       restaurantName: data['restaurantName'] ?? '',
       userId: data['userId'] ?? '',
       userEmail: data['userEmail'] ?? '',
+      userName: data['userName'],         // ✨ NOVO
+      userPhone: data['userPhone'],       // ✨ NOVO
       items: (data['items'] as List<dynamic>?)
               ?.map((item) => OrderItem.fromMap(item as Map<String, dynamic>))
               .toList() ??
           [],
       total: (data['total'] ?? data['totalAmount'] ?? 0).toDouble(),
-      deliveryAddress: data['deliveryAddress'] ?? '',
+      deliveryAddress: _parseDeliveryAddress(data['deliveryAddress']),
       status: OrderStatus.fromString(data['status'] ?? 'pending'),
       paymentStatus: PaymentStatus.fromString(data['paymentStatus'] ?? 'pending'),
-      createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      createdAt: _parseCreatedAtToDateTime(data['createdAt']),
       payment: data['payment'] != null 
           ? PaymentInfo.fromMap(data['payment'] as Map<String, dynamic>)
           : null,
     );
+  }
+
+  /// Helper to parse deliveryAddress (can be String or Map)
+  static String _parseDeliveryAddress(dynamic raw) {
+    if (raw == null) return '';
+    
+    // Se já é string, retorna direto
+    if (raw is String) return raw;
+    
+    // Se é Map, formata como string
+    if (raw is Map<String, dynamic>) {
+      final street = raw['street'] ?? '';
+      final number = raw['number'] ?? '';
+      final neighborhood = raw['neighborhood'] ?? '';
+      final city = raw['city'] ?? '';
+      final state = raw['state'] ?? '';
+      
+      if (street.isEmpty) return '';
+      
+      return '$street, $number - $neighborhood, $city - $state';
+    }
+    
+    // Fallback: converte para string
+    return raw.toString();
+  }
+
+  /// Helper to parse different createdAt formats (Timestamp, Map, String)
+  static DateTime _parseCreatedAtToDateTime(dynamic raw) {
+    try {
+      if (raw == null) return DateTime.now();
+
+      // Firestore Timestamp
+      if (raw is Timestamp) return raw.toDate();
+
+      // Some clients may serialize Timestamp as a map with 'seconds' / 'nanoseconds'
+      if (raw is Map<String, dynamic>) {
+        if (raw['seconds'] != null) {
+          final seconds = raw['seconds'];
+          if (seconds is int) {
+            return DateTime.fromMillisecondsSinceEpoch(seconds * 1000);
+          }
+          if (seconds is String) {
+            return DateTime.fromMillisecondsSinceEpoch(int.parse(seconds) * 1000);
+          }
+        }
+      }
+
+      // ISO string
+      if (raw is String) return DateTime.parse(raw);
+
+      // Fallback: try to convert to string and parse
+      return DateTime.parse(raw.toString());
+    } catch (_) {
+      return DateTime.now();
+    }
   }
 }
 
@@ -198,11 +261,13 @@ enum PaymentStatus {
 
 /// Informações do pagamento
 class PaymentInfo {
-  final String? method;
+  final String? method; // 'cash', 'pix', 'credit_card', 'debit_card'
   final String? provider;
   final String status;
   final String? transactionId;
   final String? initPoint; // URL do checkout MP
+  final bool? needsChange; // ✨ Precisa de troco?
+  final double? changeFor; // ✨ Vai pagar com quanto?
 
   PaymentInfo({
     this.method,
@@ -210,6 +275,8 @@ class PaymentInfo {
     required this.status,
     this.transactionId,
     this.initPoint,
+    this.needsChange,
+    this.changeFor,
   });
 
   Map<String, dynamic> toMap() {
@@ -219,6 +286,8 @@ class PaymentInfo {
       'status': status,
       'transactionId': transactionId,
       'initPoint': initPoint,
+      'needsChange': needsChange,
+      'changeFor': changeFor,
     };
   }
 
@@ -229,6 +298,8 @@ class PaymentInfo {
       status: map['status'] ?? 'pending',
       transactionId: map['transactionId'],
       initPoint: map['initPoint'],
+      needsChange: map['needsChange'],
+      changeFor: map['changeFor'] != null ? (map['changeFor'] as num).toDouble() : null,
     );
   }
 }

@@ -1,4 +1,6 @@
 import 'package:flutter/foundation.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 /// Estado do usuário com validação de perfil completo
 class UserState extends ChangeNotifier {
@@ -136,8 +138,18 @@ class UserState extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // TODO: Substituir por chamada real ao Firebase/API
-      await Future.delayed(const Duration(milliseconds: 800));
+      final user = FirebaseAuth.instance.currentUser;
+      
+      if (user != null) {
+        // Salvar no Firestore
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .set(data, SetOptions(merge: true));
+        
+        debugPrint('✅ [UserState] Dados salvos no Firestore');
+        debugPrint('📋 [UserState] Dados: $data');
+      }
 
       // Atualiza localmente
       _userData = {...?_userData, ...data};
@@ -145,12 +157,13 @@ class UserState extends ChangeNotifier {
       _loading = false;
       notifyListeners();
 
-      debugPrint('✅ [UserState] Dados atualizados');
+      debugPrint('✅ [UserState] Dados atualizados localmente');
       debugPrint('📋 [UserState] Cadastro completo: $isProfileComplete');
     } catch (e) {
       _error = 'Erro ao atualizar dados: $e';
       _loading = false;
       notifyListeners();
+      debugPrint('❌ [UserState] Erro ao atualizar: $e');
       rethrow;
     }
   }

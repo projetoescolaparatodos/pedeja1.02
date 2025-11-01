@@ -13,8 +13,10 @@ import '../categories/categories_page.dart';
 import '../restaurant/restaurant_detail_page.dart';
 import '../../state/cart_state.dart';
 import '../cart/cart_page.dart';
-import '../../state/user_state.dart';
 import '../profile/complete_profile_page.dart';
+import '../orders/orders_page.dart';
+import '../../core/services/operating_hours_service.dart';
+import '../../state/auth_state.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -87,6 +89,31 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
+  /// 🔄 Método para pull-to-refresh
+  Future<void> _onRefresh() async {
+    debugPrint('🔄 [HomePage] Pull-to-refresh iniciado');
+    
+    // Atualiza horários de funcionamento
+    final hoursUpdated = await OperatingHoursService.refreshOperatingHours(force: true);
+    debugPrint('🕒 [HomePage] Horários ${hoursUpdated ? "atualizados" : "não atualizados"}');
+    
+    // Recarrega dados do catálogo
+    if (mounted) {
+      final catalog = context.read<CatalogProvider>();
+      await Future.wait([
+        catalog.loadRestaurants(),
+        catalog.loadRandomProducts(force: true),
+      ]);
+    }
+    
+    // Recarrega promoções
+    setState(() {
+      _promotionsFuture = _fetchPromotions();
+    });
+    
+    debugPrint('✅ [HomePage] Refresh completo');
+  }
+
   @override
   void dispose() {
     _scrollController.dispose();
@@ -130,38 +157,63 @@ class _HomePageState extends State<HomePage> {
       body: Stack(
         children: [
           SafeArea(
-            child: SingleChildScrollView(
-              controller: _scrollController,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Promotional Carousel
-                  _buildPromotionalCarousel(),
-                  
-                  const SizedBox(height: 16),
-                  
-                  // Search Bar
-                  _buildSearchBar(),
-                  
-                  const SizedBox(height: 24),
-                  
-                  // Restaurant Section
-                  _buildRestaurantSection(),
-                  
-                  const SizedBox(height: 32),
-                  
-                  // Produtos em Destaque
-                  _buildProdutosEmDestaque(),
-                  
-                  const SizedBox(height: 32),
-                  
-                  // Farmácia & Mercado
-                  _buildFarmaciaEMercado(),
-                  
-                  const SizedBox(height: 100),
-                ],
-              ),
+            child: RefreshIndicator(
+              onRefresh: _onRefresh,
+              color: const Color(0xFFE39110),
+              backgroundColor: const Color(0xFF022E28),
+              child: CustomScrollView(
+                controller: _scrollController,
+                physics: const AlwaysScrollableScrollPhysics(
+                  parent: BouncingScrollPhysics(),
+                ), // ✅ Permite pull-to-refresh
+                slivers: [
+                // Promotional Carousel
+                SliverToBoxAdapter(
+                  child: _buildPromotionalCarousel(),
+                ),
+                
+                const SliverToBoxAdapter(
+                  child: SizedBox(height: 16),
+                ),
+                
+                // Search Bar
+                SliverToBoxAdapter(
+                  child: _buildSearchBar(),
+                ),
+                
+                const SliverToBoxAdapter(
+                  child: SizedBox(height: 24),
+                ),
+                
+                // Restaurant Section
+                SliverToBoxAdapter(
+                  child: _buildRestaurantSection(),
+                ),
+                
+                const SliverToBoxAdapter(
+                  child: SizedBox(height: 32),
+                ),
+                
+                // Produtos em Destaque
+                SliverToBoxAdapter(
+                  child: _buildProdutosEmDestaque(),
+                ),
+                
+                const SliverToBoxAdapter(
+                  child: SizedBox(height: 8), // ✅ Reduzido de 16 para 8
+                ),
+                
+                // Farmácia & Mercado
+                SliverToBoxAdapter(
+                  child: _buildFarmaciaEMercado(),
+                ),
+                
+                const SliverToBoxAdapter(
+                  child: SizedBox(height: 100),
+                ),
+              ],
             ),
+          ),
           ),
           
           // Header overlay
@@ -834,11 +886,23 @@ class _HomePageState extends State<HomePage> {
             final product = products[index];
             final restaurantName = catalog.getRestaurantName(product.restaurantId);
             
+            final restaurant = catalog.restaurants.firstWhere(
+              (r) => r.id == product.restaurantId,
+              orElse: () => RestaurantModel(
+                id: '',
+                name: '',
+                address: '',
+                isActive: true,
+                approved: true,
+                paymentStatus: 'adimplente',
+              ),
+            );
             return ProductCard(
               product: product,
               restaurantName: restaurantName,
               hero: true,
               heroTag: 'product_${product.id}',
+              isRestaurantOpen: restaurant.isOpen,
             );
           },
         ),
@@ -861,7 +925,7 @@ class _HomePageState extends State<HomePage> {
         return Column(
           children: [
             SizedBox(
-              height: 920, // Altura ajustada para 3 linhas de cards sem cortar
+              height: 840, // ✅ Reduzido para 840
               child: PageView.builder(
                 itemCount: pages.length,
                 onPageChanged: (index) {
@@ -887,11 +951,23 @@ class _HomePageState extends State<HomePage> {
                         final product = pageProducts[index];
                         final restaurantName = catalog.getRestaurantName(product.restaurantId);
                         
+                        final restaurant = catalog.restaurants.firstWhere(
+                          (r) => r.id == product.restaurantId,
+                          orElse: () => RestaurantModel(
+                            id: '',
+                            name: '',
+                            address: '',
+                            isActive: true,
+                            approved: true,
+                            paymentStatus: 'adimplente',
+                          ),
+                        );
                         return ProductCard(
                           product: product,
                           restaurantName: restaurantName,
                           hero: true,
                           heroTag: 'product_page${pageIndex}_${product.id}',
+                          isRestaurantOpen: restaurant.isOpen,
                         );
                       },
                     ),
@@ -900,7 +976,7 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
             
-            const SizedBox(height: 16),
+            const SizedBox(height: 8), // ✅ Reduzido de 16 para 8
             
             // Indicadores de página (bolinhas)
             Row(
@@ -1071,6 +1147,20 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  /// 👋 Retorna saudação baseada no horário de Belém (UTC-3)
+  String _getGreeting() {
+    final belemTime = OperatingHoursService.getBelemTime();
+    final hour = belemTime.hour;
+    
+    if (hour >= 6 && hour < 12) {
+      return 'Bom dia!';
+    } else if (hour >= 12 && hour < 18) {
+      return 'Boa tarde!';
+    } else {
+      return 'Boa noite!';
+    }
+  }
+
   Widget _buildDrawer() {
     return Drawer(
       child: Container(
@@ -1090,46 +1180,58 @@ class _HomePageState extends State<HomePage> {
                     ),
                   ),
                 ),
-                child: Row(
-                  children: [
-                    const CircleAvatar(
-                      radius: 30,
-                      backgroundColor: Color(0xFFE39110),
-                      child: Icon(
-                        Icons.person,
-                        color: Color(0xFF0D3B3B),
-                        size: 32,
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    const Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Usuário Demo',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
+                child: Consumer<AuthState>(
+                  builder: (context, authState, child) {
+                    // Pega o nome do usuário (prioriza displayName, depois nome dos userData)
+                    final userName = authState.currentUser?.displayName ?? 
+                                     authState.userData?['name'] ?? 
+                                     authState.userData?['displayName'] ?? 
+                                     'Usuário';
+                    
+                    return Row(
+                      children: [
+                        const CircleAvatar(
+                          radius: 30,
+                          backgroundColor: Color(0xFFE39110),
+                          child: Icon(
+                            Icons.person,
+                            color: Color(0xFF0D3B3B),
+                            size: 32,
                           ),
-                          SizedBox(height: 4),
-                          Text(
-                            'Bom dia!',
-                            style: TextStyle(
-                              color: Color(0xFFE39110),
-                              fontSize: 14,
-                            ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                userName,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                _getGreeting(),
+                                style: const TextStyle(
+                                  color: Color(0xFFE39110),
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close, color: Colors.white),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                  ],
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close, color: Colors.white),
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                      ],
+                    );
+                  },
                 ),
               ),
               
@@ -1155,25 +1257,29 @@ class _HomePageState extends State<HomePage> {
                     ),
                     _buildDrawerItem(
                       icon: Icons.person,
-                      title: '🧪 Testar Cadastro',
+                      title: 'Editar Perfil',
                       onTap: () async {
-                        final userState = context.read<UserState>();
-                        await userState.mockLogin();
-                        if (mounted) {
-                          Navigator.pop(context);
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (context) => const CompleteProfilePage(),
-                            ),
-                          );
-                        }
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const CompleteProfilePage(),
+                          ),
+                        );
                       },
                     ),
                     _buildDrawerItem(
                       icon: Icons.receipt_long,
-                      title: 'Pedidos',
-                      onTap: () {},
+                      title: 'Meus Pedidos',
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const OrdersPage(),
+                          ),
+                        );
+                      },
                     ),
                     const Divider(color: Color(0xFFE39110)),
                     _buildDrawerItem(

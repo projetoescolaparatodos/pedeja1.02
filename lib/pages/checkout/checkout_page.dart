@@ -1,13 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
-import '../../models/order_model.dart' as models;
-import '../../services/order_service.dart';
-import '../../services/payment_service.dart';
 import '../../state/auth_state.dart';
 import '../../state/cart_state.dart';
-import '../../state/user_state.dart';
-import 'payment_status_page.dart';
+import 'payment_method_page.dart';
 
 /// Tela de checkout com pagamento Mercado Pago
 class CheckoutPage extends StatefulWidget {
@@ -25,9 +20,6 @@ class CheckoutPage extends StatefulWidget {
 }
 
 class _CheckoutPageState extends State<CheckoutPage> {
-  final OrderService _orderService = OrderService();
-  final PaymentService _paymentService = PaymentService();
-  
   bool _isLoading = false;
   String? _errorMessage;
 
@@ -100,100 +92,19 @@ class _CheckoutPageState extends State<CheckoutPage> {
         throw Exception('Formato de endereço inválido');
       }
 
-      debugPrint('📦 Criando pedido...');
+      debugPrint('📦 Navegando para seleção de método de pagamento...');
 
-      // 3. Converter itens do carrinho para OrderItem
-      final orderItems = cartState.items.map((cartItem) {
-        return models.OrderItem(
-          productId: cartItem.id,
-          name: cartItem.name,
-          price: cartItem.price,
-          quantity: cartItem.quantity,
-          imageUrl: cartItem.imageUrl ?? '',
-          addons: cartItem.addons
-              .map((addon) => models.OrderItemAddon(
-                    name: addon['name'] as String? ?? '',
-                    price: (addon['price'] as num? ?? 0).toDouble(),
-                  ))
-              .toList(),
-        );
-      }).toList();
-
-      // 4. Criar pedido no Firebase
-      final orderId = await _orderService.createOrder(
-        restaurantId: widget.restaurantId,
-        restaurantName: widget.restaurantName,
-        items: orderItems,
-        total: cartState.total,
-        deliveryAddress: deliveryAddress,
-      );
-
-      debugPrint('✅ Pedido criado: $orderId');
-
-      // 5. Criar pagamento com split
-      debugPrint('💳 Criando pagamento com split...');
-      
-      // Obter token JWT do AuthState
-      final jwtToken = authState.jwtToken;
-      debugPrint('🔑 [CHECKOUT] Token JWT: ${jwtToken != null ? "Presente" : "Ausente"}');
-      
-      final paymentData = await _paymentService.createPaymentWithSplit(
-        orderId: orderId,
-        jwtToken: jwtToken, // ← Passar token JWT
-        paymentMethod: 'mercadopago',
-      );
-
-      // 6. Verificar resposta
-      if (!paymentData['success']) {
-        throw Exception(paymentData['error'] ?? 'Erro ao criar pagamento');
-      }
-
-      final payment = paymentData['payment'];
-      
-      debugPrint('🔍 [CHECKOUT] payment completo: $payment');
-      debugPrint('🔍 [CHECKOUT] payment keys: ${payment?.keys}');
-      
-      if (payment == null) {
-        throw Exception('Dados do pagamento não retornados');
-      }
-
-      // Tentar ambas as variações: initPoint e init_point
-      var checkoutUrl = payment['initPoint'] ?? payment['init_point'];
-      
-      debugPrint('🔍 [CHECKOUT] initPoint: ${payment['initPoint']}');
-      debugPrint('🔍 [CHECKOUT] init_point: ${payment['init_point']}');
-      debugPrint('🔍 [CHECKOUT] checkoutUrl escolhido: $checkoutUrl');
-      
-      if (checkoutUrl == null || checkoutUrl.isEmpty) {
-        throw Exception('URL do checkout não encontrada. Payment: $payment');
-      }
-
-      debugPrint('🌐 Abrindo checkout: $checkoutUrl');
-
-      // 7. Abrir checkout do Mercado Pago
-      final uri = Uri.parse(checkoutUrl);
-
-      if (await canLaunchUrl(uri)) {
-        // Abrir no navegador externo
-        await launchUrl(
-          uri,
-          mode: LaunchMode.externalApplication,
-        );
-
-        // 8. Limpar carrinho
-        cartState.clear();
-
-        // 9. Navegar para tela de status
-        if (mounted) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (_) => PaymentStatusPage(orderId: orderId),
+      // 3. Ir para seleção de método de pagamento
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (_) => PaymentMethodPage(
+              restaurantId: widget.restaurantId,
+              restaurantName: widget.restaurantName,
             ),
-          );
-        }
-      } else {
-        throw Exception('Não foi possível abrir o checkout do Mercado Pago');
+          ),
+        );
       }
     } catch (e) {
       debugPrint('❌ Erro: $e');

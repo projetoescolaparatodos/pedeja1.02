@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
-import '../core/constants/api_constants.dart';
 
 /// 🔐 Serviço de Autenticação integrado com Firebase + API Backend
 class AuthService {
@@ -300,12 +299,18 @@ class AuthService {
       debugPrint('📡 [AuthService] Chamando: $url');
 
       // ✅ Monta o body conforme a API espera
-      final body = {
+      final Map<String, dynamic> body = {
         'displayName': displayName,
         'phone': phone,
         'address': address,
         'userType': userType ?? 'customer',
       };
+
+      // Adiciona detalhes do endereço se fornecido
+      if (addressDetails != null) {
+        body['addressDetails'] = addressDetails;
+        debugPrint('📍 [AuthService] Endereço detalhado: $addressDetails');
+      }
 
       // Adiciona CPF se fornecido
       if (cpf != null && cpf.isNotEmpty) {

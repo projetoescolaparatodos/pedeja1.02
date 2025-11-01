@@ -37,6 +37,14 @@
   bool get canAcceptOrders => isOpen;
 
   factory RestaurantModel.fromJson(Map<String, dynamic> json) {
+    // Tenta buscar primeiro 'apiIsOpen', se não existir, usa 'isOpen'
+    bool? apiIsOpenValue;
+    if (json.containsKey('apiIsOpen')) {
+      apiIsOpenValue = json['apiIsOpen'] as bool?;
+    } else if (json.containsKey('isOpen')) {
+      apiIsOpenValue = json['isOpen'] as bool?;
+    }
+    
     return RestaurantModel(
       id: json['id']?.toString() ?? '',
       name: json['name']?.toString() ?? '',
@@ -56,7 +64,7 @@
       updatedAt: json['updatedAt'] != null 
           ? DateTime.tryParse(json['updatedAt'].toString())
           : null,
-      apiIsOpen: json['apiIsOpen'] as bool?,
+      apiIsOpen: apiIsOpenValue,
     );
   }
 

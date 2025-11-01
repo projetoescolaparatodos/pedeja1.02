@@ -1,6 +1,9 @@
 import 'package:flutter/foundation.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../services/auth_service.dart';
+import '../services/notification_service.dart';
+import '../services/order_status_listener_service.dart';
 
 /// 🔐 Estado de Autenticação com Provider
 class AuthState extends ChangeNotifier {
@@ -33,12 +36,75 @@ class AuthState extends ChangeNotifier {
       if (user != null) {
         debugPrint('🔔 [AuthState] Usuário logado: ${user.email}');
         _loadUserData();
+        _saveLoginState(user.email!); // ✅ Salvar estado de login
+        
+        // 📦 Iniciar monitoramento de status de pedidos
+        OrderStatusListenerService.startListeningToUserOrders();
       } else {
         debugPrint('🔔 [AuthState] Usuário deslogado');
         _userData = null;
         _registrationComplete = false;
+        _clearLoginState(); // ✅ Limpar estado salvo
+        
+        // 🛑 Parar monitoramento de pedidos
+        OrderStatusListenerService.stopListeningToAllOrders();
+        OrderStatusListenerService.clearCache();
       }
     });
+    
+    // ✅ Tentar fazer auto-login ao iniciar
+    _tryAutoLogin();
+  }
+
+  /// 💾 Salvar estado de login
+  Future<void> _saveLoginState(String email) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('isLoggedIn', true);
+      await prefs.setString('userEmail', email);
+      debugPrint('💾 [AuthState] Estado de login salvo para: $email');
+    } catch (e) {
+      debugPrint('❌ [AuthState] Erro ao salvar estado: $e');
+    }
+  }
+
+  /// 🗑️ Limpar estado de login
+  Future<void> _clearLoginState() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('isLoggedIn');
+      await prefs.remove('userEmail');
+      debugPrint('🗑️ [AuthState] Estado de login limpo');
+    } catch (e) {
+      debugPrint('❌ [AuthState] Erro ao limpar estado: $e');
+    }
+  }
+
+  /// 🔄 Tentar auto-login
+  Future<void> _tryAutoLogin() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final isLoggedIn = prefs.getBool('isLoggedIn') ?? false;
+      final userEmail = prefs.getString('userEmail');
+
+      if (isLoggedIn && userEmail != null) {
+        debugPrint('🔄 [AuthState] Tentando auto-login para: $userEmail');
+        
+        // Firebase já mantém a sessão, só precisamos recarregar os dados
+        final currentUser = FirebaseAuth.instance.currentUser;
+        if (currentUser != null) {
+          _currentUser = currentUser;
+          await _loadUserData();
+          debugPrint('✅ [AuthState] Auto-login bem-sucedido!');
+        } else {
+          // Sessão expirou, limpar dados salvos
+          await _clearLoginState();
+          debugPrint('⚠️ [AuthState] Sessão expirada, necessário fazer login novamente');
+        }
+      }
+    } catch (e) {
+      debugPrint('❌ [AuthState] Erro no auto-login: $e');
+    }
   }
 
   /// 🚀 Login
@@ -69,6 +135,15 @@ class AuthState extends ChangeNotifier {
         if (_restaurantData != null) {
           debugPrint('🏪 [AuthState] restaurantData: $_restaurantData');
         }
+        
+        // 🔔 Registrar token FCM após login bem-sucedido
+        if (_authService.jwtToken != null) {
+          await NotificationService.updateAuthToken(_authService.jwtToken!);
+          debugPrint('🔔 [AuthState] Token FCM atualizado após login');
+        }
+        
+        // 📦 Iniciar monitoramento de status de pedidos
+        await OrderStatusListenerService.startListeningToUserOrders();
         
         _isLoading = false;
         notifyListeners();
@@ -122,6 +197,15 @@ class AuthState extends ChangeNotifier {
           debugPrint('🏪 [AuthState] Usuário é parceiro: $_restaurantData');
         }
         
+        // 🔔 Registrar token FCM após cadastro bem-sucedido
+        if (_authService.jwtToken != null) {
+          await NotificationService.updateAuthToken(_authService.jwtToken!);
+          debugPrint('🔔 [AuthState] Token FCM atualizado após cadastro');
+        }
+        
+        // 📦 Iniciar monitoramento de status de pedidos
+        await OrderStatusListenerService.startListeningToUserOrders();
+        
         _isLoading = false;
         notifyListeners();
         return true;
@@ -158,13 +242,14 @@ class AuthState extends ChangeNotifier {
       debugPrint('📤 [AuthState] Enviando dados para API:');
       debugPrint('   Nome: $displayName');
       debugPrint('   Telefone: $phone');
-      debugPrint('   Endereço: ${address['formatted']}');
+      debugPrint('   Endereço completo: $address');
       
       final result = await _authService.completeRegistration(
         displayName: displayName,
         phone: phone,
         address: address['formatted'] ?? '',
         cpf: cpf,
+        addressDetails: address,
       );
 
       if (result['success']) {
@@ -198,11 +283,26 @@ class AuthState extends ChangeNotifier {
   /// 📡 Carregar dados do usuário
   Future<void> _loadUserData() async {
     try {
+      // ✅ SEMPRE renovar o JWT ao carregar dados do usuário
+      debugPrint('🔄 [AuthState] Renovando JWT token...');
+      final tokenRenewed = await _authService.refreshJWT();
+      
+      if (!tokenRenewed) {
+        debugPrint('❌ [AuthState] Falha ao renovar token JWT');
+        return;
+      }
+      
+      debugPrint('✅ [AuthState] JWT token renovado com sucesso');
+      
+      // Agora verifica se o cadastro está completo
       final isComplete = await _authService.checkRegistrationComplete();
       _registrationComplete = isComplete;
       _userData = _authService.userData;
+      _restaurantData = _authService.restaurantData;
       
       debugPrint('📋 [AuthState] Dados carregados - Complete: $isComplete');
+      debugPrint('👤 [AuthState] userData: $_userData');
+      
       notifyListeners();
     } catch (e) {
       debugPrint('❌ [AuthState] Erro ao carregar dados: $e');
@@ -229,6 +329,13 @@ class AuthState extends ChangeNotifier {
   Future<void> signOut() async {
     _isLoading = true;
     notifyListeners();
+
+    // 🔔 Limpar token FCM antes do logout
+    await NotificationService.clearToken();
+    
+    // 🛑 Parar monitoramento de pedidos
+    await OrderStatusListenerService.stopListeningToAllOrders();
+    OrderStatusListenerService.clearCache();
 
     await _authService.signOut();
     

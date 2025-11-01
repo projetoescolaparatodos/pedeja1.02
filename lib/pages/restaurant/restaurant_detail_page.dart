@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'dart:async';
 import '../../models/restaurant_model.dart';
 import '../../models/product_model.dart';
 import '../../widgets/common/product_card.dart';
+import '../../core/services/operating_hours_service.dart';
 
 class RestaurantDetailPage extends StatefulWidget {
   final RestaurantModel restaurant;
@@ -22,18 +24,57 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
   List<ProductModel> _products = [];
   bool _isLoading = true;
   String? _error;
+  Timer? _refreshTimer;
+  RestaurantModel? _currentRestaurant;
 
   @override
   void initState() {
     super.initState();
+    _currentRestaurant = widget.restaurant;
     _loadProducts();
+    
+    // ✅ Atualiza horários ao abrir a página
+    OperatingHoursService.refreshOperatingHours().then((_) {
+      // Depois de atualizar horários, recarrega o status do restaurante
+      _refreshRestaurantStatus();
+    });
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
+  }
+
+  /// 🔄 Atualiza apenas o status do restaurante sem recarregar produtos
+  Future<void> _refreshRestaurantStatus() async {
+    try {
+      final response = await http.get(
+        Uri.parse('https://api-pedeja.vercel.app/api/restaurants/${widget.restaurant.id}'),
+      );
+
+      if (response.statusCode == 200) {
+        final decoded = json.decode(response.body);
+        final restaurantData = decoded is Map<String, dynamic> ? decoded : decoded['data'];
+        
+        if (mounted && restaurantData != null) {
+          setState(() {
+            _currentRestaurant = RestaurantModel.fromJson(restaurantData);
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Erro ao atualizar status do restaurante: $e');
+    }
   }
 
   Future<void> _loadProducts() async {
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
+    if (mounted) {
+      setState(() {
+        _isLoading = true;
+        _error = null;
+      });
+    }
 
     try {
       final url = 'https://api-pedeja.vercel.app/api/restaurants/${widget.restaurant.id}/products';
@@ -43,20 +84,24 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
         final decoded = json.decode(response.body);
         final List<dynamic> productsData = decoded is List ? decoded : (decoded['data'] as List? ?? []);
 
-        setState(() {
-          _products = productsData
-              .map((p) => ProductModel.fromJson(p))
-              .toList();
-          _isLoading = false;
-        });
+        if (mounted) {
+          setState(() {
+            _products = productsData
+                .map((p) => ProductModel.fromJson(p))
+                .toList();
+            _isLoading = false;
+          });
+        }
       } else {
         throw Exception('Erro ao carregar produtos: ${response.statusCode}');
       }
     } catch (e) {
-      setState(() {
-        _error = 'Erro ao carregar produtos: $e';
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _error = 'Erro ao carregar produtos: $e';
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -152,7 +197,8 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
 
   Widget _buildRestaurantInfo() {
     // Sempre mostrar status usando a lógica do model
-    final isOpen = widget.restaurant.isOpen;
+    final restaurant = _currentRestaurant ?? widget.restaurant;
+    final isOpen = restaurant.isOpen;
 
     return Container(
       padding: const EdgeInsets.all(32),
@@ -170,7 +216,7 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
         children: [
           // Nome do restaurante
           Text(
-            widget.restaurant.name,
+            restaurant.name,
             style: const TextStyle(
               color: Colors.white,
               fontSize: 32,
@@ -374,8 +420,10 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
           ),
           itemCount: _products.length,
           itemBuilder: (context, index) {
+            final restaurant = _currentRestaurant ?? widget.restaurant;
             return ProductCard(
               product: _products[index],
+              isRestaurantOpen: restaurant.apiIsOpen == true,
             );
           },
         ),

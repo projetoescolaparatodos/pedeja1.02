@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'dart:async';
 import '../../models/product_model.dart';
 import '../../models/restaurant_model.dart';
 import '../../widgets/common/product_card.dart';
@@ -26,18 +27,38 @@ class _CategoryEstablishmentsPageState
   List<Map<String, dynamic>> _establishments = [];
   bool _loading = true;
   String? _error;
+  Timer? _refreshTimer;
+
+  bool _isRestaurantOpen(dynamic apiIsOpen) {
+    if (apiIsOpen == null) return true;
+    if (apiIsOpen is bool) return apiIsOpen;
+    if (apiIsOpen is String) return apiIsOpen.toLowerCase() == 'true';
+    return true;
+  }
 
   @override
   void initState() {
     super.initState();
     _loadEstablishments();
+    // Atualiza automaticamente a cada 5 minutos para sincronizar com mudanças de status
+    _refreshTimer = Timer.periodic(const Duration(minutes: 5), (_) {
+      _loadEstablishments(showLoading: false);
+    });
   }
 
-  Future<void> _loadEstablishments() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _loadEstablishments({bool showLoading = true}) async {
+    if (showLoading) {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    }
 
     try {
       // Busca todos os restaurantes
@@ -71,9 +92,14 @@ class _CategoryEstablishmentsPageState
           final restaurantName = restaurant['name'] ?? 'Sem nome';
 
           try {
+            // Normaliza o campo isOpen para apiIsOpen (compatibilidade com RestaurantModel)
+            Map<String, dynamic> restaurantData = Map.from(restaurant);
+            if (restaurant.containsKey('isOpen')) {
+              restaurantData['apiIsOpen'] = restaurant['isOpen'];
+            }
+
             final productsResponse = await http.get(
-              Uri.parse(
-                  'https://api-pedeja.vercel.app/api/restaurants/$restaurantId/products'),
+              Uri.parse('https://api-pedeja.vercel.app/api/restaurants/$restaurantId/products'),
             );
 
             List<dynamic> products = [];
@@ -90,7 +116,7 @@ class _CategoryEstablishmentsPageState
             establishments.add({
               'id': restaurantId,
               'name': restaurantName,
-              'data': restaurant,
+              'data': restaurantData,
               'products': products,
             });
 
@@ -292,53 +318,55 @@ class _CategoryEstablishmentsPageState
                           ),
                         ),
                         // Badge de status
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 5,
-                          ),
-                          decoration: BoxDecoration(
-                            color: (restaurantData['isOpen'] == true)
-                                ? const Color(0xFF022E28)
-                                : const Color(0xFFFF5722),
-                            borderRadius: BorderRadius.circular(8),
-                            border: (restaurantData['isOpen'] == true)
-                                ? Border.all(
-                                    color: const Color(0xFFE39110),
-                                    width: 2,
-                                  )
-                                : null,
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Container(
-                                width: 5,
-                                height: 5,
-                                decoration: BoxDecoration(
-                                  color: (restaurantData['isOpen'] == true)
-                                      ? const Color(0xFFE39110)
-                                      : Colors.white,
-                                  shape: BoxShape.circle,
+                        // Lógica robusta para status aberto/fechado
+                        (() {
+                          final isOpen = _isRestaurantOpen(restaurantData['apiIsOpen']);
+                          return Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 5,
+                            ),
+                            decoration: BoxDecoration(
+                              color: isOpen
+                                  ? const Color(0xFF022E28)
+                                  : const Color(0xFFFF5722),
+                              borderRadius: BorderRadius.circular(8),
+                              border: isOpen
+                                  ? Border.all(
+                                      color: const Color(0xFFE39110),
+                                      width: 2,
+                                    )
+                                  : null,
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  width: 5,
+                                  height: 5,
+                                  decoration: BoxDecoration(
+                                    color: isOpen
+                                        ? const Color(0xFFE39110)
+                                        : Colors.white,
+                                    shape: BoxShape.circle,
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(width: 5),
-                              Text(
-                                (restaurantData['isOpen'] == true)
-                                    ? 'Aberto'
-                                    : 'Fechado',
-                                style: TextStyle(
-                                  color: (restaurantData['isOpen'] == true)
-                                      ? const Color(0xFFE39110)
-                                      : Colors.white,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.bold,
-                                  letterSpacing: 0.5,
+                                const SizedBox(width: 5),
+                                Text(
+                                  isOpen ? 'Aberto' : 'Fechado',
+                                  style: TextStyle(
+                                    color: isOpen
+                                        ? const Color(0xFFE39110)
+                                        : Colors.white,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                    letterSpacing: 0.5,
+                                  ),
                                 ),
-                              ),
-                            ],
-                          ),
-                        ),
+                              ],
+                            ),
+                          );
+                        })(),
                       ],
                     ),
                   ),
@@ -374,6 +402,7 @@ class _CategoryEstablishmentsPageState
                             width: 160,
                             child: ProductCard(
                               product: ProductModel.fromJson(product),
+                              isRestaurantOpen: _isRestaurantOpen(restaurantData['apiIsOpen']),
                             ),
                           ),
                         );

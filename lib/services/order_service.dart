@@ -15,6 +15,7 @@ class OrderService {
     required List<models.OrderItem> items,
     required double total,
     required String deliveryAddress,
+    models.PaymentInfo? paymentInfo,
   }) async {
     try {
       final user = _auth.currentUser;
@@ -51,6 +52,17 @@ class OrderService {
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       };
+
+      // Adicionar informações de pagamento se fornecidas
+      if (paymentInfo != null) {
+        orderData['paymentInfo'] = {
+          'method': paymentInfo.method,
+          'provider': paymentInfo.provider,
+          'status': paymentInfo.status,
+          if (paymentInfo.needsChange != null) 'needsChange': paymentInfo.needsChange,
+          if (paymentInfo.changeFor != null) 'changeFor': paymentInfo.changeFor,
+        };
+      }
 
       final docRef = await _firestore.collection('orders').add(orderData);
       
@@ -186,6 +198,34 @@ class OrderService {
       debugPrint('✅ [OrderService] Pedido cancelado: $orderId');
     } catch (e) {
       debugPrint('❌ [OrderService] Erro ao cancelar pedido: $e');
+      rethrow;
+    }
+  }
+  
+  /// Confirmar pagamento em dinheiro (chamado pelo entregador/restaurante)
+  Future<void> confirmCashPayment({
+    required String orderId,
+    double? receivedAmount,
+    double? changeGiven,
+  }) async {
+    try {
+      final updateData = <String, dynamic>{
+        'paymentStatus': 'paid',
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+      
+      if (receivedAmount != null) {
+        updateData['paymentInfo.receivedAmount'] = receivedAmount;
+      }
+      if (changeGiven != null) {
+        updateData['paymentInfo.changeGiven'] = changeGiven;
+      }
+      
+      await _firestore.collection('orders').doc(orderId).update(updateData);
+      
+      debugPrint('✅ [OrderService] Pagamento em dinheiro confirmado: $orderId');
+    } catch (e) {
+      debugPrint('❌ [OrderService] Erro ao confirmar pagamento: $e');
       rethrow;
     }
   }

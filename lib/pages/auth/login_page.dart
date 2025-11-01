@@ -252,11 +252,15 @@ class _LoginPageState extends State<LoginPage> {
                       child: ElevatedButton(
                         onPressed: authState.isLoading ? null : _handleLogin,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFE39110),
+                          backgroundColor: const Color(0xFF74241F),
                           foregroundColor: Colors.white,
-                          disabledBackgroundColor: const Color(0xFF74241F),
+                          disabledBackgroundColor: const Color(0xFF5A1C18),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
+                            side: const BorderSide(
+                              color: Color(0xFFE39110),
+                              width: 2,
+                            ),
                           ),
                           elevation: 4,
                         ),

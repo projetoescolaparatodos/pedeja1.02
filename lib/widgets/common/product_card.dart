@@ -12,6 +12,7 @@ class ProductCard extends StatelessWidget {
   final VoidCallback? onTap;
   final bool hero;
   final String? heroTag;
+  final bool isRestaurantOpen;
 
   const ProductCard({
     super.key,
@@ -20,6 +21,7 @@ class ProductCard extends StatelessWidget {
     this.onTap,
     this.hero = false,
     this.heroTag,
+    this.isRestaurantOpen = true,
   });
 
   @override
@@ -239,14 +241,19 @@ class ProductCard extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
-        onTap: () {
-          if (onTap != null) {
-            onTap!();
-          } else {
-            _navigateToDetail(context);
-          }
-        },
-        child: card,
+        onTap: isRestaurantOpen
+            ? () {
+                if (onTap != null) {
+                  onTap!();
+                } else {
+                  _navigateToDetail(context);
+                }
+              }
+            : null,
+        child: Opacity(
+          opacity: isRestaurantOpen ? 1.0 : 0.5,
+          child: card,
+        ),
       ),
     );
 

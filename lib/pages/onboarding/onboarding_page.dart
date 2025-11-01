@@ -14,17 +14,17 @@ class _OnboardingPageState extends State<OnboardingPage> {
 
   final List<OnboardingItem> _items = [
     OnboardingItem(
-      image: 'assets/images/Img.png',
-      title: 'Peça sua comida favorita',
-      description: 'Descubra os melhores restaurantes e produtos da sua região',
-    ),
-    OnboardingItem(
-      image: 'assets/images/Img_(1).png',
+      image: 'assets/images/onboarding_1.png',
       title: 'Entrega rápida',
       description: 'Receba seus pedidos com rapidez e segurança',
     ),
     OnboardingItem(
-      image: 'assets/images/Img_(2).png',
+      image: 'assets/images/onboarding_2.png',
+      title: 'Peça sua comida favorita',
+      description: 'Descubra os melhores restaurantes e produtos da sua região',
+    ),
+    OnboardingItem(
+      image: 'assets/images/onboarding_3.png',
       title: 'Comece agora!',
       description: 'Faça seu cadastro e aproveite as melhores ofertas',
     ),
@@ -118,10 +118,14 @@ class _OnboardingPageState extends State<OnboardingPage> {
                 child: ElevatedButton(
                   onPressed: _nextPage,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFE39110),
+                    backgroundColor: const Color(0xFF74241F),
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
+                      side: const BorderSide(
+                        color: Color(0xFFE39110),
+                        width: 2,
+                      ),
                     ),
                     elevation: 4,
                   ),
@@ -147,25 +151,45 @@ class _OnboardingPageState extends State<OnboardingPage> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          // Image
+          // Image com bordas arredondadas, sombra e borda dourada
           Expanded(
             flex: 3,
-            child: Image.asset(
-              item.image,
-              fit: BoxFit.contain,
-              errorBuilder: (context, error, stackTrace) {
-                return Container(
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF022E28),
-                    borderRadius: BorderRadius.circular(20),
+            child: Container(
+              margin: const EdgeInsets.symmetric(horizontal: 16),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(
+                  color: const Color(0xFFE39110),
+                  width: 3,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.3),
+                    blurRadius: 20,
+                    offset: const Offset(0, 10),
                   ),
-                  child: const Icon(
-                    Icons.restaurant_menu,
-                    size: 120,
-                    color: Color(0xFFE39110),
-                  ),
-                );
-              },
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(24),
+                child: Image.asset(
+                  item.image,
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container(
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF022E28),
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                      child: const Icon(
+                        Icons.restaurant_menu,
+                        size: 120,
+                        color: Color(0xFFE39110),
+                      ),
+                    );
+                  },
+                ),
+              ),
             ),
           ),
 

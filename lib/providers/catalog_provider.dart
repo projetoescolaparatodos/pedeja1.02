@@ -1,10 +1,13 @@
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'dart:async';
 import '../models/restaurant_model.dart';
 import '../models/product_model.dart';
 
 class CatalogProvider extends ChangeNotifier {
+  Timer? _refreshTimer;
+  
   // RESTAURANTES
   List<RestaurantModel> _restaurants = [];
   bool _restaurantsLoading = false;
@@ -31,6 +34,45 @@ class CatalogProvider extends ChangeNotifier {
   String get selectedCategory => _selectedCategory;
   List<String> get availableCategories => _availableCategories.toList();
   String get searchQuery => _searchQuery;
+
+  CatalogProvider() {
+    // Inicia o timer de refresh automático a cada 5 minutos
+    _startAutoRefresh();
+  }
+
+  void _startAutoRefresh() {
+    _refreshTimer?.cancel();
+    _refreshTimer = Timer.periodic(const Duration(minutes: 5), (_) {
+      debugPrint('🔄 [CatalogProvider] Auto-refresh ativado (5min)');
+      // Recarrega restaurantes silenciosamente para atualizar status
+      _silentRefreshRestaurants();
+    });
+  }
+
+  /// Atualiza restaurantes sem mostrar loading (para não interferir na UX)
+  Future<void> _silentRefreshRestaurants() async {
+    try {
+      final response = await http.get(
+        Uri.parse('https://api-pedeja.vercel.app/api/restaurants'),
+        headers: {'Content-Type': 'application/json'},
+      );
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = json.decode(response.body);
+        _restaurants = data.map((json) => RestaurantModel.fromJson(json)).toList();
+        notifyListeners(); // Notifica listeners para atualizar UI
+        debugPrint('✅ [CatalogProvider] Restaurantes atualizados automaticamente');
+      }
+    } catch (error) {
+      debugPrint('❌ [CatalogProvider] Erro no auto-refresh: $error');
+    }
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
+  }
 
   /// Produtos filtrados por categoria e busca
   List<ProductModel> get filteredProducts {

@@ -38,17 +38,63 @@ dependencies:
   firebase_core: ^3.10.0
   firebase_auth: ^5.3.3
   cloud_firestore: ^5.5.2
+  firebase_messaging: ^15.1.4
+  
+  # Notificações
+  flutter_local_notifications: ^18.0.1
+  
+  # Chat em tempo real
+  pusher_channels_flutter: ^2.5.0
   
   # URL Launcher (Mercado Pago Checkout)
   url_launcher: ^6.2.2
+  video_player: ^2.8.2
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.13.1
+  flutter_native_splash: ^2.4.1
 
 flutter:
   uses-material-design: true
   
   assets:
-    - assets/images/
+     - assets/images/
+     - assets/video/Premium_App_Logo_Animation_Creation.mp4
+
+flutter_icons:
+  android: true
+  ios: true
+  image_path: "assets/images/app_icon.png"
+
+flutter_native_splash:
+  # Logo do PedeJá centralizada em fundo laranja
+  image: assets/images/logo-pede-ja.png
+  
+  # ✅ Cor de fundo LARANJA (cor do app)
+  color: "#E39110"
+  
+  # ✅ PREENCHER TODA A TELA
+  fullscreen: true
+  
+  # ✅ Imagem centralizada (logo fica melhor centralizada)
+  image_dark: assets/images/logo-pede-ja.png
+  color_dark: "#E39110"
+  
+  # Android - centralizar a logo
+  android: true
+  android_gravity: center
+  android_12:
+    image: assets/images/logo-pede-ja.png
+    color: "#E39110"
+    image_dark: assets/images/logo-pede-ja.png
+    color_dark: "#E39110"
+  
+  # iOS
+  ios: true
+  ios_content_mode: scaleAspectFit
+  
+  # Web
+  web: false

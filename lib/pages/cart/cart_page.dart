@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../state/cart_state.dart';
-import '../../state/user_state.dart';
 import '../../state/auth_state.dart';
 import '../../models/cart_item.dart';
 import '../profile/complete_profile_page.dart';
@@ -411,7 +410,6 @@ class CartPage extends StatelessWidget {
   static Future<void> _processCheckout(BuildContext context) async {
     debugPrint('🛒 [CHECKOUT] Iniciando processo de checkout');
     
-    final userState = context.read<UserState>();
     final authState = context.read<AuthState>();
 
     // 📡 Atualizar dados do AuthState verificando com a API

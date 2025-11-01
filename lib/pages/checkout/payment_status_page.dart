@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../models/order_model.dart' as models;
 import '../../services/order_service.dart';
+import '../orders/orders_page.dart';
 
 /// Tela de acompanhamento do status do pagamento
 class PaymentStatusPage extends StatefulWidget {
@@ -154,14 +155,45 @@ class _PaymentStatusPageState extends State<PaymentStatusPage> {
 
             const SizedBox(height: 40),
 
+            // Botão ver pedido
+            ElevatedButton.icon(
+              onPressed: () {
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(
+                    builder: (context) => const OrdersPage(),
+                  ),
+                  (route) => route.isFirst,
+                );
+              },
+              icon: const Icon(Icons.shopping_bag),
+              label: const Text('Ver Meus Pedidos'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF74241F),
+                foregroundColor: Colors.white,
+                minimumSize: const Size(double.infinity, 56),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: const BorderSide(
+                    color: Color(0xFFE39110),
+                    width: 2,
+                  ),
+                ),
+              ),
+            ),
+            
+            const SizedBox(height: 12),
+
             // Botão voltar ao início
-            ElevatedButton(
+            OutlinedButton(
               onPressed: () {
                 Navigator.of(context).popUntil((route) => route.isFirst);
               },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFE39110),
-                foregroundColor: Colors.white,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFFE39110),
+                side: const BorderSide(
+                  color: Color(0xFFE39110),
+                  width: 2,
+                ),
                 minimumSize: const Size(double.infinity, 56),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),

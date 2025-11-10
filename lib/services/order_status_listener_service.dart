@@ -116,6 +116,11 @@ class OrderStatusListenerService {
         body = 'Seu pedido #$shortOrderId está pronto para ser retirado ou entregue!';
         break;
         
+      case models.OrderStatus.onTheWay: // ✨ Notificação para "Saiu para Entrega"
+        title = '🚗 Pedido Saiu para Entrega!';
+        body = 'Seu pedido #$shortOrderId está a caminho! Aguarde na localização de entrega.';
+        break;
+        
       case models.OrderStatus.delivered:
         title = '🎉 Pedido Entregue!';
         body = 'Seu pedido #$shortOrderId foi entregue. Bom apetite!';
@@ -131,7 +136,9 @@ class OrderStatusListenerService {
         body = 'Pedido #$shortOrderId: ${newStatus.label}';
     }
     
-    // Enviar notificação
+    // ⚠️ IMPORTANTE: Notificações locais só funcionam com APP ABERTO
+    // Para notificações com app FECHADO, o backend precisa enviar via FCM
+    // quando detectar mudança de status no Firebase
     NotificationService.showOrderStatusNotification(
       orderId: order.id,
       title: title,

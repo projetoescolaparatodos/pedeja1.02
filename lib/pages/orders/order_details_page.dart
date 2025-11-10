@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:provider/provider.dart';
+import 'package:cloud_firestore/cloud_firestore.dart' hide Order;
+import 'dart:async';
 import '../../models/order_model.dart';
 import '../../services/chat_service.dart';
 import '../../state/auth_state.dart';
@@ -17,30 +19,109 @@ class OrderDetailsPage extends StatefulWidget {
   State<OrderDetailsPage> createState() => _OrderDetailsPageState();
 }
 
-class _OrderDetailsPageState extends State<OrderDetailsPage> {
+class _OrderDetailsPageState extends State<OrderDetailsPage> with WidgetsBindingObserver {
   final TextEditingController _messageController = TextEditingController();
   final List<ChatMessage> _messages = [];
   final ScrollController _scrollController = ScrollController();
   bool _isChatExpanded = false;
   bool _isConnecting = true;
   String? _error;
+  bool _isDisconnecting = false;
+  
+  // ✅ Estado atual do pedido (atualizado em tempo real)
+  late Order _currentOrder;
+  StreamSubscription<DocumentSnapshot>? _orderSubscription;
 
   @override
   void initState() {
     super.initState();
+    _currentOrder = widget.order;
+    WidgetsBinding.instance.addObserver(this);
     _loadCachedMessages();
     _initializeChat();
+    _listenToOrderChanges(); // ✅ Escutar mudanças no pedido
+  }
+  
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    
+    // ✅ Apenas desconectar se pedido estiver entregue ou cancelado
+    if (state == AppLifecycleState.paused || state == AppLifecycleState.detached) {
+      // ✅ Usar _currentOrder que é atualizado em tempo real
+      if (_currentOrder.status == OrderStatus.delivered || 
+          _currentOrder.status == OrderStatus.cancelled) {
+        debugPrint('📦 [OrderDetailsPage] Pedido finalizado, desconectando chat');
+        _safeDisconnect();
+      } else {
+        debugPrint('📦 [OrderDetailsPage] Pedido ativo, mantendo conexão para notificações');
+      }
+    }
+    
+    // ✅ Reconectar quando o app volta ao foreground
+    if (state == AppLifecycleState.resumed) {
+      debugPrint('🔄 [OrderDetailsPage] App retomado, reconectando chat...');
+      _initializeChat();
+    }
   }
 
-  void _loadCachedMessages() {
-    // Carregar mensagens do cache
-    final cachedMessages = ChatService.getCachedMessages(widget.order.id);
+  Future<void> _loadCachedMessages() async {
+    // Carregar mensagens do cache (agora é assíncrono)
+    final cachedMessages = await ChatService.getCachedMessages(widget.order.id);
     if (cachedMessages.isNotEmpty) {
       setState(() {
         _messages.addAll(cachedMessages);
       });
       debugPrint('💬 [OrderDetailsPage] ${cachedMessages.length} mensagens carregadas do cache');
     }
+  }
+
+  /// ✅ Escutar mudanças no status do pedido em tempo real
+  void _listenToOrderChanges() {
+    final authState = Provider.of<AuthState>(context, listen: false);
+    if (authState.currentUser == null) return;
+
+    debugPrint('📡 [OrderDetailsPage] Iniciando listener de mudanças do pedido ${widget.order.id}');
+
+    _orderSubscription = FirebaseFirestore.instance
+        .collection('orders')
+        .doc(widget.order.id)
+        .snapshots()
+        .listen((snapshot) {
+      if (snapshot.exists) {
+        try {
+          final updatedOrder = Order.fromFirestore(
+            snapshot.data() as Map<String, dynamic>,
+            snapshot.id,
+          );
+          
+          // ✅ Detectar mudança de status
+          if (updatedOrder.status != _currentOrder.status) {
+            debugPrint('🔄 [OrderDetailsPage] Status mudou: ${_currentOrder.status.label} → ${updatedOrder.status.label}');
+            
+            setState(() {
+              _currentOrder = updatedOrder;
+            });
+            
+            // ✅ Se pedido foi entregue/cancelado, desconectar chat
+            if (updatedOrder.status == OrderStatus.delivered || 
+                updatedOrder.status == OrderStatus.cancelled) {
+              debugPrint('📦 [OrderDetailsPage] Pedido finalizado, desconectando chat');
+              _safeDisconnect();
+            }
+          } else {
+            // Atualizar outros campos sem mudar status
+            setState(() {
+              _currentOrder = updatedOrder;
+            });
+          }
+        } catch (e) {
+          debugPrint('❌ [OrderDetailsPage] Erro ao processar atualização: $e');
+        }
+      }
+    }, onError: (error) {
+      debugPrint('❌ [OrderDetailsPage] Erro no listener: $error');
+    });
   }
 
   Future<void> _initializeChat() async {
@@ -67,11 +148,23 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
       await ChatService.initialize(
         orderId: widget.order.id,
         userId: authState.currentUser!.uid,
+        restaurantName: widget.order.restaurantName, // ✅ Passar nome do restaurante
         onMessageReceived: (message) {
-          setState(() {
-            _messages.add(message);
-          });
-          _scrollToBottom();
+          // ✅ Evitar duplicatas: verificar se já existe mensagem similar recente
+          final isDuplicate = _messages.any((m) => 
+            m.message == message.message && 
+            m.user == message.user &&
+            m.timestamp.difference(message.timestamp).abs().inSeconds < 5
+          );
+          
+          if (!isDuplicate) {
+            setState(() {
+              _messages.add(message);
+            });
+            _scrollToBottom();
+          } else {
+            debugPrint('⚠️ [OrderDetailsPage] Mensagem duplicada ignorada');
+          }
         },
         onError: (error) {
           setState(() {
@@ -99,21 +192,41 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
     final userId = authState.currentUser?.uid ?? '';
 
     final message = _messageController.text;
-
-    // ✅ NÃO adicionar localmente - o Pusher vai devolver a mensagem
-    // Isso evita duplicação (local + Pusher)
     
-    // Enviar via backend → Pusher devolverá para todos (incluindo o remetente)
+    // ✅ Adicionar mensagem localmente IMEDIATAMENTE (feedback visual)
+    final localMessage = ChatMessage(
+      user: userName,
+      message: message,
+      timestamp: DateTime.now(),
+      isMe: true,
+      isRestaurant: false,
+    );
+    
+    setState(() {
+      _messages.add(localMessage);
+    });
+    _messageController.clear();
+    _scrollToBottom();
+    
+    // Enviar via backend → Pusher pode devolver outra cópia
     ChatService.sendMessage(
       orderId: widget.order.id,
       message: message,
       userName: userName,
       userId: userId,
       jwtToken: authState.jwtToken ?? '',
-    );
-
-    _messageController.clear();
-    _scrollToBottom();
+    ).catchError((error) {
+      debugPrint('❌ [OrderDetailsPage] Erro ao enviar mensagem: $error');
+      // Mostrar erro ao usuário
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erro ao enviar mensagem: $error'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    });
   }
 
   void _scrollToBottom() {
@@ -130,11 +243,34 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _messageController.dispose();
     _scrollController.dispose();
-    // ✅ Não desconectar completamente, apenas remover callbacks desta página
-    ChatService.disconnect(orderId: widget.order.id);
+    // ✅ Cancelar listener do Firestore
+    _orderSubscription?.cancel();
+    
+    // ✅ NÃO desconectar o chat ao sair da página
+    // O chat só deve desconectar quando:
+    // 1. Pedido for entregue/cancelado
+    // 2. Usuário fizer logout
+    debugPrint('📦 [OrderDetailsPage] Saindo da página, mantendo chat conectado para notificações');
+    
     super.dispose();
+  }
+  
+  /// Desconectar de forma segura sem propagar exceções
+  void _safeDisconnect() {
+    if (_isDisconnecting) return;
+    _isDisconnecting = true;
+    
+    // Usar Future.delayed para evitar erro durante dispose
+    Future.delayed(Duration.zero, () async {
+      try {
+        await ChatService.disconnect(orderId: widget.order.id);
+      } catch (e) {
+        debugPrint('⚠️ [OrderDetailsPage] Erro ao desconectar (ignorado): $e');
+      }
+    });
   }
 
   @override
@@ -234,36 +370,49 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
             icon: Icons.receipt_long,
             title: 'Pedido Recebido',
             isActive: true,
-            isCompleted: widget.order.status != OrderStatus.pending,
+            isCompleted: _currentOrder.status != OrderStatus.pending,
           ),
           _buildStatusConnector(
-            isCompleted: widget.order.status != OrderStatus.pending,
+            isCompleted: _currentOrder.status != OrderStatus.pending,
           ),
           _buildStatusStep(
             icon: Icons.restaurant,
             title: 'Preparando',
-            isActive: widget.order.status == OrderStatus.preparing,
-            isCompleted: widget.order.status == OrderStatus.ready ||
-                widget.order.status == OrderStatus.delivered,
+            isActive: _currentOrder.status == OrderStatus.preparing,
+            isCompleted: _currentOrder.status == OrderStatus.ready ||
+                _currentOrder.status == OrderStatus.onTheWay ||
+                _currentOrder.status == OrderStatus.delivered,
           ),
           _buildStatusConnector(
-            isCompleted: widget.order.status == OrderStatus.ready ||
-                widget.order.status == OrderStatus.delivered,
+            isCompleted: _currentOrder.status == OrderStatus.ready ||
+                _currentOrder.status == OrderStatus.onTheWay ||
+                _currentOrder.status == OrderStatus.delivered,
           ),
           _buildStatusStep(
             icon: Icons.check_circle,
             title: 'Pronto',
-            isActive: widget.order.status == OrderStatus.ready,
-            isCompleted: widget.order.status == OrderStatus.delivered,
+            isActive: _currentOrder.status == OrderStatus.ready,
+            isCompleted: _currentOrder.status == OrderStatus.onTheWay ||
+                _currentOrder.status == OrderStatus.delivered,
           ),
           _buildStatusConnector(
-            isCompleted: widget.order.status == OrderStatus.delivered,
+            isCompleted: _currentOrder.status == OrderStatus.onTheWay ||
+                _currentOrder.status == OrderStatus.delivered,
           ),
           _buildStatusStep(
             icon: Icons.delivery_dining,
+            title: 'A Caminho',
+            isActive: _currentOrder.status == OrderStatus.onTheWay,
+            isCompleted: _currentOrder.status == OrderStatus.delivered,
+          ),
+          _buildStatusConnector(
+            isCompleted: _currentOrder.status == OrderStatus.delivered,
+          ),
+          _buildStatusStep(
+            icon: Icons.home,
             title: 'Entregue',
-            isActive: widget.order.status == OrderStatus.delivered,
-            isCompleted: widget.order.status == OrderStatus.delivered,
+            isActive: _currentOrder.status == OrderStatus.delivered,
+            isCompleted: _currentOrder.status == OrderStatus.delivered,
           ),
         ],
       ),
@@ -567,6 +716,7 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
                   fontWeight: FontWeight.w600,
                 ),
               ),
+              // Mostrar apenas os nomes dos adicionais, não os preços
               if (item.addons.isNotEmpty) ...[
                 const SizedBox(height: 4),
                 ...item.addons.map((addon) => Padding(
@@ -580,11 +730,20 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
                   ),
                 )),
               ],
+              // Mostrar preço base + adicionais
+              const SizedBox(height: 4),
+              Text(
+                'R\$ ${item.price.toStringAsFixed(2)}${item.addons.isNotEmpty ? ' + ${item.addons.map((a) => a.price).reduce((a, b) => a + b).toStringAsFixed(2)}' : ''}',
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.5),
+                  fontSize: 12,
+                ),
+              ),
             ],
           ),
         ),
         
-        // Price
+        // Price (total do item com quantidade)
         Text(
           'R\$ ${item.totalPrice.toStringAsFixed(2)}',
           style: const TextStyle(
@@ -726,7 +885,7 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
                     ),
                   ),
                   Text(
-                    widget.order.payment!.method!.toUpperCase(),
+                    _translatePaymentMethod(widget.order.payment!.method!),
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 14,
@@ -735,6 +894,51 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
                   ),
                 ],
               ),
+            // ✅ Mostrar informação de troco se necessário
+            if (widget.order.payment!.needsChange == true) ...[
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Troco para:',
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontSize: 14,
+                    ),
+                  ),
+                  Text(
+                    'R\$ ${widget.order.payment!.changeFor?.toStringAsFixed(2) ?? '0.00'}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Troco:',
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontSize: 14,
+                    ),
+                  ),
+                  Text(
+                    'R\$ ${widget.order.payment!.changeAmount?.toStringAsFixed(2) ?? '0.00'}',
+                    style: const TextStyle(
+                      color: Color(0xFFE39110),
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ],
         ],
       ),
@@ -742,6 +946,13 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
   }
 
   Widget _buildOrderSummary() {
+    // Calcular subtotal dos itens se não vier do backend
+    final subtotal = widget.order.subtotal ?? 
+                     widget.order.items.fold<double>(0, (sum, item) => sum + item.totalPrice);
+    final deliveryFee = widget.order.deliveryFee ?? 0;
+    final discount = widget.order.discount ?? 0;
+    final serviceFee = widget.order.serviceFee ?? 0;
+    
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
       padding: const EdgeInsets.all(20),
@@ -757,6 +968,7 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
       ),
       child: Column(
         children: [
+          // Subtotal dos itens
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -768,7 +980,7 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
                 ),
               ),
               Text(
-                'R\$ ${widget.order.total.toStringAsFixed(2)}',
+                'R\$ ${subtotal.toStringAsFixed(2)}',
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 16,
@@ -776,9 +988,85 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
               ),
             ],
           ),
+          
+          // Taxa de entrega
+          if (deliveryFee > 0) ...[
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Taxa de entrega',
+                  style: TextStyle(
+                    color: Colors.white70,
+                    fontSize: 16,
+                  ),
+                ),
+                Text(
+                  'R\$ ${deliveryFee.toStringAsFixed(2)}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                  ),
+                ),
+              ],
+            ),
+          ],
+          
+          // Taxa de serviço
+          if (serviceFee > 0) ...[
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Taxa de serviço',
+                  style: TextStyle(
+                    color: Colors.white70,
+                    fontSize: 16,
+                  ),
+                ),
+                Text(
+                  'R\$ ${serviceFee.toStringAsFixed(2)}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                  ),
+                ),
+              ],
+            ),
+          ],
+          
+          // Desconto
+          if (discount > 0) ...[
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Desconto',
+                  style: TextStyle(
+                    color: Colors.green,
+                    fontSize: 16,
+                  ),
+                ),
+                Text(
+                  '- R\$ ${discount.toStringAsFixed(2)}',
+                  style: const TextStyle(
+                    color: Colors.green,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ],
+          
           const SizedBox(height: 12),
           const Divider(color: Colors.white24),
           const SizedBox(height: 12),
+          
+          // Total
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -1069,6 +1357,26 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
         ),
       ),
     );
+  }
+  
+  /// Traduzir método de pagamento
+  String _translatePaymentMethod(String method) {
+    switch (method.toLowerCase()) {
+      case 'cash':
+        return 'Dinheiro';
+      case 'credit_card':
+      case 'credit':
+        return 'Cartão de Crédito';
+      case 'debit_card':
+      case 'debit':
+        return 'Cartão de Débito';
+      case 'pix':
+        return 'PIX';
+      case 'mercado_pago':
+        return 'Mercado Pago';
+      default:
+        return method.toUpperCase();
+    }
   }
 }
 

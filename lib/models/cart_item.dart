@@ -1,7 +1,7 @@
 class CartItem {
   final String id;              // ID do produto
   final String name;            // Nome do produto
-  final double price;           // Preço unitário (já com adicionais!)
+  final double price;           // ✅ Preço unitário BASE (sem adicionais)
   final String? imageUrl;       // URL da imagem
   final int quantity;           // Quantidade
   final List<Map<String, dynamic>> addons; // Adicionais escolhidos
@@ -19,8 +19,17 @@ class CartItem {
     this.restaurantName,
   });
 
-  // 💰 Preço total (preço × quantidade)
-  double get totalPrice => price * quantity;
+  // 💰 Calcula preço dos adicionais
+  double get addonsTotal {
+    if (addons.isEmpty) return 0;
+    return addons.fold<double>(0, (sum, addon) => sum + (addon['price'] as num).toDouble());
+  }
+
+  // 💰 Preço unitário com adicionais (base + adicionais)
+  double get unitPriceWithAddons => price + addonsTotal;
+
+  // 💰 Preço total (preço unitário com adicionais × quantidade)
+  double get totalPrice => unitPriceWithAddons * quantity;
 
   // 📝 Descrição dos adicionais
   String get addonsDescription {

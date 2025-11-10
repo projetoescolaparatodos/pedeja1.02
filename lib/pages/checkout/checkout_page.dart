@@ -313,7 +313,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
                           Icon(Icons.payment, size: 24),
                           SizedBox(width: 12),
                           Text(
-                            'Pagar com Mercado Pago',
+                            'Método de Pagamento',
                             style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,

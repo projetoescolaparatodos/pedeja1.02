@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:pusher_channels_flutter/pusher_channels_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'backend_order_service.dart';
 import 'notification_service.dart';
 
@@ -54,18 +55,26 @@ class ChatService {
   // Mensagens em cache por orderId
   static final Map<String, List<ChatMessage>> _messagesCache = {};
   
+  // ✅ Nome do restaurante por orderId (para notificações)
+  static final Map<String, String> _restaurantNames = {};
+  
   // Lista de canais ativos
   static final Set<String> _activeChannels = {};
 
   /// Configuração do Pusher
   static const String _apiKey = '45b7798e358505a8343e';
   static const String _cluster = 'us2';
+  
+  /// Chave para SharedPreferences
+  static const String _storagePrefix = 'chat_messages_';
+  static const Duration _cacheExpiration = Duration(days: 7); // Mensagens duram 7 dias
 
   /// Inicializar Pusher e conectar ao canal do pedido
   static Future<void> initialize({
     required String orderId,
     required String userId,
     required Function(ChatMessage) onMessageReceived,
+    String? restaurantName, // ✅ Adicionar nome do restaurante
     Function(String)? onError,
   }) async {
     try {
@@ -75,6 +84,11 @@ class ChatService {
       _messageCallbacks[orderId] = onMessageReceived;
       if (onError != null) {
         _errorCallbacks[orderId] = onError;
+      }
+      
+      // ✅ Salvar nome do restaurante para notificações
+      if (restaurantName != null) {
+        _restaurantNames[orderId] = restaurantName;
       }
 
       if (!_initialized) {
@@ -92,6 +106,26 @@ class ChatService {
             },
             onConnectionStateChange: (String? currentState, String? previousState) {
               debugPrint('🔄 [ChatService] Estado: $previousState -> $currentState');
+              
+              // ✅ Reconectar automaticamente se desconectado (mas com limite)
+              if (currentState == 'DISCONNECTED' && _activeChannels.isNotEmpty) {
+                debugPrint('🔄 [ChatService] Tentando reconectar em 3 segundos...');
+                Future.delayed(const Duration(seconds: 3), () {
+                  if (_initialized && _activeChannels.isNotEmpty) {
+                    _pusher.connect().then((_) {
+                      debugPrint('✅ [ChatService] Reconectado!');
+                    }).catchError((e) {
+                      debugPrint('❌ [ChatService] Erro ao reconectar: $e');
+                      // Não tentar reconectar indefinidamente
+                    });
+                  }
+                });
+              }
+              
+              // ✅ Evitar loop de reconexão
+              if (currentState == 'RECONNECTING') {
+                debugPrint('⚠️ [ChatService] Pusher em loop de reconexão, aguardando...');
+              }
             },
           );
 
@@ -153,21 +187,29 @@ class ChatService {
 
             debugPrint('💬 [ChatService] Data parsed: $data');
             
-            final message = ChatMessage.fromMap(data, isMe: data['userId'] == userId);
-            debugPrint('💬 [ChatService] Mensagem criada: ${message.message} (isMe: ${message.isMe}, isRestaurant: ${message.isRestaurant})');
+            // ✅ Backend pode enviar 'userId' ou 'senderId'
+            final messageSenderId = data['userId'] ?? data['senderId'];
+            final message = ChatMessage.fromMap(data, isMe: messageSenderId == userId);
+            debugPrint('💬 [ChatService] Mensagem criada: ${message.message} (senderId: $messageSenderId, userId: $userId, isMe: ${message.isMe}, isRestaurant: ${message.isRestaurant})');
             
-            // Adicionar ao cache
+            // Adicionar ao cache (memória + storage)
             if (!_messagesCache.containsKey(orderId)) {
               _messagesCache[orderId] = [];
             }
             _messagesCache[orderId]!.add(message);
             
+            // Salvar no storage de forma assíncrona (não bloqueia)
+            _saveMessagesToStorage(orderId).catchError((e) {
+              debugPrint('⚠️ [ChatService] Erro ao salvar mensagem no storage (continuando): $e');
+            });
+            
             // ✅ Disparar notificação se NÃO for mensagem própria e for do restaurante
             if (!message.isMe && message.isRestaurant) {
               debugPrint('🔔 [ChatService] Disparando notificação de nova mensagem');
+              final restaurantName = _restaurantNames[orderId] ?? 'Restaurante';
               NotificationService.showChatNotification(
                 orderId: orderId,
-                senderName: message.user,
+                senderName: restaurantName, // ✅ Usar nome do restaurante
                 messageText: message.message,
               );
             }
@@ -231,10 +273,36 @@ class ChatService {
         debugPrint('👋 [ChatService] Removendo callbacks do pedido $orderId');
         _messageCallbacks.remove(orderId);
         _errorCallbacks.remove(orderId);
+        
+        // Unsubscribe do canal específico
+        final channelName = 'order-$orderId';
+        if (_activeChannels.contains(channelName)) {
+          try {
+            await _pusher.unsubscribe(channelName: channelName);
+            _activeChannels.remove(channelName);
+            debugPrint('✅ [ChatService] Unsubscribed do canal $channelName');
+          } catch (e) {
+            debugPrint('⚠️ [ChatService] Erro ao unsubscribe (ignorando): $e');
+            // Ignora erro de unsubscribe, apenas remove do set
+            _activeChannels.remove(channelName);
+          }
+        }
       } else {
         // Desconectar completamente
         debugPrint('👋 [ChatService] Desconectando completamente...');
-        await _pusher.disconnect();
+        
+        try {
+          // Desconectar sem esperar muito tempo
+          await _pusher.disconnect().timeout(
+            const Duration(seconds: 2),
+            onTimeout: () {
+              debugPrint('⚠️ [ChatService] Timeout ao desconectar (ignorado)');
+            },
+          );
+        } catch (e) {
+          debugPrint('⚠️ [ChatService] Erro ao desconectar (ignorado): $e');
+        }
+        
         _initialized = false;
         _messageCallbacks.clear();
         _errorCallbacks.clear();
@@ -242,26 +310,95 @@ class ChatService {
         debugPrint('✅ [ChatService] Desconectado');
       }
     } catch (e) {
-      debugPrint('❌ [ChatService] Erro ao desconectar: $e');
+      debugPrint('❌ [ChatService] Erro ao desconectar (não crítico): $e');
+      // Não propaga o erro, apenas loga
     }
   }
 
-  /// Obter mensagens do cache
-  static List<ChatMessage> getCachedMessages(String orderId) {
-    return _messagesCache[orderId] ?? [];
+  /// Obter mensagens do cache (primeiro tenta memória, depois SharedPreferences)
+  static Future<List<ChatMessage>> getCachedMessages(String orderId) async {
+    // Se já tem em memória, retorna
+    if (_messagesCache.containsKey(orderId) && _messagesCache[orderId]!.isNotEmpty) {
+      debugPrint('💾 [ChatService] Retornando ${_messagesCache[orderId]!.length} mensagens da memória');
+      return _messagesCache[orderId]!;
+    }
+    
+    // Tentar carregar do SharedPreferences
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final key = '$_storagePrefix$orderId';
+      final storedData = prefs.getString(key);
+      
+      if (storedData != null) {
+        final Map<String, dynamic> data = json.decode(storedData);
+        final DateTime savedAt = DateTime.parse(data['savedAt']);
+        
+        // Verificar se não expirou
+        if (DateTime.now().difference(savedAt) < _cacheExpiration) {
+          final List<dynamic> messagesJson = data['messages'];
+          final messages = messagesJson.map((m) => ChatMessage.fromMap(m)).toList();
+          
+          // Salvar em memória para acesso rápido
+          _messagesCache[orderId] = messages;
+          
+          debugPrint('💾 [ChatService] ${messages.length} mensagens carregadas do storage (salvas há ${DateTime.now().difference(savedAt).inHours}h)');
+          return messages;
+        } else {
+          debugPrint('⏰ [ChatService] Mensagens expiradas, limpando storage');
+          await prefs.remove(key);
+        }
+      }
+    } catch (e) {
+      debugPrint('❌ [ChatService] Erro ao carregar mensagens do storage: $e');
+    }
+    
+    return [];
   }
 
-  /// Adicionar mensagem ao cache (usado ao enviar)
-  static void addMessageToCache(String orderId, ChatMessage message) {
+  /// Adicionar mensagem ao cache (memória + SharedPreferences)
+  static Future<void> addMessageToCache(String orderId, ChatMessage message) async {
+    // Adicionar à memória
     if (!_messagesCache.containsKey(orderId)) {
       _messagesCache[orderId] = [];
     }
     _messagesCache[orderId]!.add(message);
+    
+    // Salvar no SharedPreferences
+    await _saveMessagesToStorage(orderId);
+  }
+  
+  /// Salvar mensagens no SharedPreferences
+  static Future<void> _saveMessagesToStorage(String orderId) async {
+    try {
+      final messages = _messagesCache[orderId];
+      if (messages == null || messages.isEmpty) return;
+      
+      final prefs = await SharedPreferences.getInstance();
+      final key = '$_storagePrefix$orderId';
+      
+      final data = {
+        'savedAt': DateTime.now().toIso8601String(),
+        'messages': messages.map((m) => m.toMap()).toList(),
+      };
+      
+      await prefs.setString(key, json.encode(data));
+      debugPrint('💾 [ChatService] ${messages.length} mensagens salvas no storage');
+    } catch (e) {
+      debugPrint('❌ [ChatService] Erro ao salvar mensagens no storage: $e');
+    }
   }
 
-  /// Limpar cache de um pedido
-  static void clearCache(String orderId) {
+  /// Limpar cache de um pedido (memória + SharedPreferences)
+  static Future<void> clearCache(String orderId) async {
     _messagesCache.remove(orderId);
+    
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('$_storagePrefix$orderId');
+      debugPrint('🗑️ [ChatService] Cache limpo para pedido $orderId');
+    } catch (e) {
+      debugPrint('❌ [ChatService] Erro ao limpar cache: $e');
+    }
   }
 
   /// Verificar se está conectado

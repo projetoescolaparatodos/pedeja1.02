@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
 import 'package:provider/provider.dart';
+import 'package:cloud_firestore/cloud_firestore.dart' hide Order;
 import '../../models/order_model.dart';
 import '../../state/auth_state.dart';
 import 'order_details_page.dart';
@@ -41,58 +40,45 @@ class _OrdersPageState extends State<OrdersPage> with SingleTickerProviderStateM
 
     try {
       final authState = Provider.of<AuthState>(context, listen: false);
-      final token = authState.jwtToken;
+      final userId = authState.currentUser?.uid;
 
-      if (token == null) {
+      if (userId == null) {
         throw Exception('Usuário não autenticado');
       }
 
-      // ✅ Buscar todos os pedidos do usuário
-      final response = await http.get(
-        Uri.parse('https://api-pedeja.vercel.app/api/users/orders'),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-      );
+      debugPrint('📦 [OrdersPage] Buscando pedidos do Firestore para userId: $userId');
 
-      debugPrint('📦 [OrdersPage] Status: ${response.statusCode}');
+      // ✅ Buscar diretamente do Firestore para garantir dados atualizados
+      final snapshot = await FirebaseFirestore.instance
+          .collection('orders')
+          .where('userId', isEqualTo: userId)
+          .orderBy('createdAt', descending: true)
+          .get();
+
+      debugPrint('📦 [OrdersPage] Total de pedidos no Firestore: ${snapshot.docs.length}');
       
-      if (response.statusCode == 200) {
-        final List<dynamic> data = json.decode(response.body);
-        debugPrint('📦 [OrdersPage] Total de pedidos: ${data.length}');
-        
-        final List<Order> allOrders = data.map((json) {
-          return Order.fromFirestore(json as Map<String, dynamic>, json['id'] ?? '');
-        }).toList();
+      final List<Order> allOrders = snapshot.docs.map((doc) {
+        return Order.fromFirestore(doc.data(), doc.id);
+      }).toList();
 
-        // ✅ Separar pedidos ativos dos concluídos
-        // Ativos: pending, confirmed, preparing, delivering
-        // Concluídos: delivered, cancelled
-        final List<Order> active = allOrders.where((order) {
-          final status = order.status.value;
-          return status == 'pending' || 
-                 status == 'confirmed' || 
-                 status == 'preparing' || 
-                 status == 'delivering';
-        }).toList();
-        
-        final List<Order> completed = allOrders.where((order) {
-          final status = order.status.value;
-          return status == 'delivered' || status == 'cancelled';
-        }).toList();
+      // ✅ Separar pedidos ativos dos concluídos
+      final List<Order> active = allOrders.where((order) {
+        return order.status != OrderStatus.delivered && 
+               order.status != OrderStatus.cancelled;
+      }).toList();
+      
+      final List<Order> completed = allOrders.where((order) {
+        return order.status == OrderStatus.delivered || 
+               order.status == OrderStatus.cancelled;
+      }).toList();
 
-        debugPrint('📦 [OrdersPage] Ativos: ${active.length}, Concluídos: ${completed.length}');
+      debugPrint('📦 [OrdersPage] Ativos: ${active.length}, Concluídos: ${completed.length}');
 
-        setState(() {
-          _activeOrders = active;
-          _completedOrders = completed;
-          _isLoading = false;
-        });
-      } else {
-        debugPrint('❌ [OrdersPage] Erro ${response.statusCode}: ${response.body}');
-        throw Exception('Erro ao carregar pedidos: ${response.statusCode}');
-      }
+      setState(() {
+        _activeOrders = active;
+        _completedOrders = completed;
+        _isLoading = false;
+      });
     } catch (e) {
       debugPrint('❌ [OrdersPage] Exception: $e');
       setState(() {
@@ -471,6 +457,9 @@ class _OrdersPageState extends State<OrdersPage> with SingleTickerProviderStateM
         break;
       case OrderStatus.ready:
         backgroundColor = Colors.purple;
+        break;
+      case OrderStatus.onTheWay:
+        backgroundColor = Colors.blue;
         break;
       case OrderStatus.delivered:
         backgroundColor = Colors.green;

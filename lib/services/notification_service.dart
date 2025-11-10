@@ -1,4 +1,5 @@
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -164,8 +165,16 @@ class NotificationService {
     try {
       debugPrint('📤 [NotificationService] Enviando token para backend...');
 
-      final response = await http.post(
-        Uri.parse('https://api-pedeja.vercel.app/api/users/fcm-token'),
+      // ✅ Obter userId do Firebase Auth
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        debugPrint('⚠️ [NotificationService] Usuário não autenticado');
+        return;
+      }
+
+      // ✅ Usar endpoint correto: PUT /api/users/:userId
+      final response = await http.put(
+        Uri.parse('https://api-pedeja.vercel.app/api/users/${user.uid}'),
         headers: {
           'Authorization': 'Bearer $_authToken',
           'Content-Type': 'application/json',
@@ -175,6 +184,8 @@ class NotificationService {
 
       if (response.statusCode == 200) {
         debugPrint('✅ [NotificationService] Token FCM registrado no backend');
+        debugPrint('   User ID: ${user.uid}');
+        debugPrint('   Token: ${token.substring(0, 20)}...');
       } else {
         debugPrint('❌ [NotificationService] Erro ao registrar token:');
         debugPrint('   Status: ${response.statusCode}');

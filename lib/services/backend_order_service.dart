@@ -46,6 +46,7 @@ class BackendOrderService {
             }).toList(),
           }).toList(),
           'totalAmount': total,
+          'deliveryFee': 0.0,              // ✅ Taxa de entrega sempre 0 (adicionada manualmente depois pelo vendedor)
           'deliveryAddress': deliveryAddress,
           'payment': payment,
           if (userName != null) 'userName': userName,

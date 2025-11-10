@@ -15,6 +15,7 @@ import '../../state/cart_state.dart';
 import '../cart/cart_page.dart';
 import '../profile/complete_profile_page.dart';
 import '../orders/orders_page.dart';
+import '../auth/login_page.dart';
 import '../../core/services/operating_hours_service.dart';
 import '../../state/auth_state.dart';
 
@@ -1296,7 +1297,65 @@ class _HomePageState extends State<HomePage> {
                       icon: Icons.logout,
                       title: 'Sair',
                       textColor: Colors.red,
-                      onTap: () {},
+                      onTap: () async {
+                        // Mostrar diálogo de confirmação
+                        final shouldLogout = await showDialog<bool>(
+                          context: context,
+                          builder: (context) => AlertDialog(
+                            backgroundColor: const Color(0xFF1A1A1A),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            title: const Text(
+                              'Sair da Conta',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            content: const Text(
+                              'Deseja realmente sair da sua conta?',
+                              style: TextStyle(color: Colors.white70),
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(context, false),
+                                child: const Text(
+                                  'Cancelar',
+                                  style: TextStyle(color: Colors.white70),
+                                ),
+                              ),
+                              ElevatedButton(
+                                onPressed: () => Navigator.pop(context, true),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.red,
+                                  foregroundColor: Colors.white,
+                                ),
+                                child: const Text('Sair'),
+                              ),
+                            ],
+                          ),
+                        );
+
+                        if (shouldLogout == true && mounted) {
+                          // Fechar drawer
+                          Navigator.pop(context);
+                          
+                          // Fazer logout
+                          final authState = Provider.of<AuthState>(context, listen: false);
+                          await authState.signOut();
+                          
+                          // Navegar para página de login
+                          if (mounted) {
+                            Navigator.of(context).pushAndRemoveUntil(
+                              MaterialPageRoute(
+                                builder: (context) => const LoginPage(),
+                              ),
+                              (route) => false,
+                            );
+                          }
+                        }
+                      },
                     ),
                   ],
                 ),

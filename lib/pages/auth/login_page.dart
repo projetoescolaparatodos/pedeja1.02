@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../state/auth_state.dart';
 import 'signup_page.dart';
+import 'forgot_password_page.dart';
 import '../home/home_page.dart';
 import '../profile/complete_profile_page.dart';
 
@@ -225,10 +226,10 @@ class _LoginPageState extends State<LoginPage> {
                   alignment: Alignment.centerRight,
                   child: TextButton(
                     onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Recuperação de senha em desenvolvimento'),
-                          backgroundColor: Color(0xFF74241F),
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const ForgotPasswordPage(),
                         ),
                       );
                     },

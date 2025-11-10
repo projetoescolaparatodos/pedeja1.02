@@ -589,7 +589,6 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
 
                     // Coleta adicionais selecionados
                     final selectedAddonsList = <Map<String, dynamic>>[];
-                    double addonsTotal = 0.0;
 
                     for (var addon in _addons) {
                       if (_selectedAddons[addon['name']] == true) {
@@ -598,19 +597,17 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                           'name': addon['name'],
                           'price': addon['price'],
                         });
-                        addonsTotal += (addon['price'] as num).toDouble();
                       }
                     }
 
-                    // Preço total = preço base + adicionais
-                    final totalPrice = widget.product.price + addonsTotal;
-
                     // ✅ Adiciona ao carrinho
+                    // IMPORTANTE: price deve ser APENAS o preço base do produto
+                    // Os adicionais são enviados separadamente no array 'addons'
                     for (int i = 0; i < _quantity; i++) {
                       cart.addItem(
                         productId: widget.product.id,
                         name: widget.product.name,
-                        price: totalPrice,
+                        price: widget.product.price, // ✅ APENAS preço base
                         imageUrl: widget.product.displayImage,
                         addons: selectedAddonsList,
                         restaurantId: widget.product.restaurantId,

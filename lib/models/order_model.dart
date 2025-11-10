@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 
 /// Modelo de item do pedido
 class OrderItem {
@@ -41,8 +42,8 @@ class OrderItem {
   factory OrderItem.fromMap(Map<String, dynamic> map) {
     return OrderItem(
       productId: map['productId'] ?? '',
-      name: map['name'] ?? '',
-      price: (map['price'] ?? 0).toDouble(),
+      name: map['title'] ?? map['name'] ?? '', // ✅ Prioriza 'title' do backend
+      price: (map['unitPrice'] ?? map['price'] ?? 0).toDouble(), // ✅ Usa 'unitPrice' do backend
       quantity: map['quantity'] ?? 1,
       imageUrl: map['imageUrl'] ?? '',
       addons: (map['addons'] as List<dynamic>?)
@@ -94,6 +95,12 @@ class Order {
   final PaymentStatus paymentStatus;
   final DateTime createdAt;
   final PaymentInfo? payment;
+  
+  // ✨ Campos adicionais do pedido
+  final double? subtotal;      // Subtotal dos itens (sem taxa de entrega)
+  final double? deliveryFee;   // Taxa de entrega
+  final double? discount;      // Desconto aplicado
+  final double? serviceFee;    // Taxa de serviço
 
   Order({
     required this.id,
@@ -110,6 +117,10 @@ class Order {
     required this.paymentStatus,
     required this.createdAt,
     this.payment,
+    this.subtotal,
+    this.deliveryFee,
+    this.discount,
+    this.serviceFee,
   });
 
   Map<String, dynamic> toMap() {
@@ -158,6 +169,11 @@ class Order {
       payment: data['payment'] != null 
           ? PaymentInfo.fromMap(data['payment'] as Map<String, dynamic>)
           : null,
+      // ✨ Novos campos
+      subtotal: data['subtotal'] != null ? (data['subtotal'] as num).toDouble() : null,
+      deliveryFee: data['deliveryFee'] != null ? (data['deliveryFee'] as num).toDouble() : null,
+      discount: data['discount'] != null ? (data['discount'] as num).toDouble() : null,
+      serviceFee: data['serviceFee'] != null ? (data['serviceFee'] as num).toDouble() : null,
     );
   }
 
@@ -222,6 +238,7 @@ enum OrderStatus {
   pending('pending', 'Pendente'),
   preparing('preparing', 'Preparando'),
   ready('ready', 'Pronto'),
+  onTheWay('on_the_way', 'A Caminho'),
   delivered('delivered', 'Entregue'),
   cancelled('cancelled', 'Cancelado');
 
@@ -231,10 +248,38 @@ enum OrderStatus {
   const OrderStatus(this.value, this.label);
 
   static OrderStatus fromString(String value) {
-    return OrderStatus.values.firstWhere(
-      (status) => status.value == value,
-      orElse: () => OrderStatus.pending,
-    );
+    // ✅ Suportar valores em português e inglês
+    final normalizedValue = value.toLowerCase().trim();
+    
+    switch (normalizedValue) {
+      case 'pending':
+      case 'pendente':
+        return OrderStatus.pending;
+      case 'preparing':
+      case 'preparando':
+      case 'em_preparo':
+      case 'em preparo': // ✨ Nova variação
+        return OrderStatus.preparing;
+      case 'ready':
+      case 'pronto':
+        return OrderStatus.ready;
+      case 'on_the_way':
+      case 'ontheway':
+      case 'a_caminho':
+      case 'delivering':
+      case 'saiu para entrega': // ✨ Nova variação
+      case 'saiu_para_entrega': // ✨ Nova variação
+        return OrderStatus.onTheWay;
+      case 'delivered':
+      case 'entregue':
+        return OrderStatus.delivered;
+      case 'cancelled':
+      case 'cancelado':
+        return OrderStatus.cancelled;
+      default:
+        debugPrint('⚠️ [OrderStatus] Status desconhecido: $value, usando pending');
+        return OrderStatus.pending;
+    }
   }
 }
 
@@ -268,6 +313,7 @@ class PaymentInfo {
   final String? initPoint; // URL do checkout MP
   final bool? needsChange; // ✨ Precisa de troco?
   final double? changeFor; // ✨ Vai pagar com quanto?
+  final double? changeAmount; // ✨ Valor do troco
 
   PaymentInfo({
     this.method,
@@ -277,6 +323,7 @@ class PaymentInfo {
     this.initPoint,
     this.needsChange,
     this.changeFor,
+    this.changeAmount,
   });
 
   Map<String, dynamic> toMap() {
@@ -288,6 +335,7 @@ class PaymentInfo {
       'initPoint': initPoint,
       'needsChange': needsChange,
       'changeFor': changeFor,
+      'changeAmount': changeAmount,
     };
   }
 
@@ -300,6 +348,7 @@ class PaymentInfo {
       initPoint: map['initPoint'],
       needsChange: map['needsChange'],
       changeFor: map['changeFor'] != null ? (map['changeFor'] as num).toDouble() : null,
+      changeAmount: map['changeAmount'] != null ? (map['changeAmount'] as num).toDouble() : null,
     );
   }
 }

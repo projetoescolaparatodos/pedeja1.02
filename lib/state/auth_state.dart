@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../services/auth_service.dart';
 import '../services/notification_service.dart';
 import '../services/order_status_listener_service.dart';
+import '../services/order_status_pusher_service.dart';
 
 /// 🔐 Estado de Autenticação com Provider
 class AuthState extends ChangeNotifier {
@@ -38,8 +39,14 @@ class AuthState extends ChangeNotifier {
         _loadUserData();
         _saveLoginState(user.email!); // ✅ Salvar estado de login
         
-        // 📦 Iniciar monitoramento de status de pedidos
+        // 📦 Iniciar monitoramento de status de pedidos (Firestore)
         OrderStatusListenerService.startListeningToUserOrders();
+        
+        // 📡 Iniciar monitoramento via Pusher (Real-time)
+        OrderStatusPusherService.initialize(
+          userId: user.uid,
+          authToken: _authService.jwtToken,
+        );
       } else {
         debugPrint('🔔 [AuthState] Usuário deslogado');
         _userData = null;
@@ -49,6 +56,9 @@ class AuthState extends ChangeNotifier {
         // 🛑 Parar monitoramento de pedidos
         OrderStatusListenerService.stopListeningToAllOrders();
         OrderStatusListenerService.clearCache();
+        
+        // 🛑 Desconectar Pusher
+        OrderStatusPusherService.disconnect();
       }
     });
     

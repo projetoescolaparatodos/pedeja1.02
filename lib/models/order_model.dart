@@ -235,7 +235,7 @@ class Order {
 
 /// Status do pedido
 enum OrderStatus {
-  pending('pending', 'Processando pagamento'),           // Aguardando pagamento
+  pending('pending', 'Pendente'),                        // Aguardando pagamento
   accepted('accepted', 'Pedido confirmado'),             // Pronto pra produzir ✅
   preparing('preparing', 'Preparando seu pedido'),       // Em preparação 👨‍🍳
   ready('ready', 'Pronto!'),                             // Pronto para retirada/entrega 📦

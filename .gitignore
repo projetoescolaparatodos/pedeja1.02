@@ -1,45 +1,71 @@
-# Miscellaneous
+# ===== CONFIGURAÇÃO ESPECIAL PARA GOOGLE PLAY SUBMISSION =====
+# Este .gitignore permite APENAS arquivos seguros do Android
+
+# Ignora TUDO da raiz do Flutter (não precisa para Google Play)
+lib/
+test/
+assets/
+web/
+ios/
+linux/
+macos/
+windows/
+pubspec.yaml
+pubspec.lock
+analysis_options.yaml
+*.md
+!README.md
+
+# ===== ARQUIVOS SENSÍVEIS - NUNCA COMMITAR =====
+**/google-services.json
+**/firebase_options.dart
+**/*-firebase-*.json
+**/*.keystore
+**/*.jks
+**/key.properties
+**/signing.properties
+**/local.properties
+**/.env
+**/.env.*
+**/secrets.*
+**/*credentials*.json
+
+# ===== BUILD E CACHE =====
+**/build/
+**/.dart_tool/
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+**/.packages
+**/*.iml
+**/.idea/
 *.class
 *.log
 *.pyc
 *.swp
 .DS_Store
-.atom/
-.build/
-.buildlog/
-.history
-.svn/
-.swiftpm/
-migrate_working_dir/
+Thumbs.db
+**/app/debug/
+**/app/profile/
+**/app/release/
 
-# IntelliJ related
-*.iml
-*.ipr
-*.iws
-.idea/
+# ===== PERMITE ARQUIVOS ANDROID SEGUROS =====
+# Gradle wrapper (NECESSÁRIO para build)
+!android/gradlew
+!android/gradlew.bat
+!android/gradle/
+!android/gradle/wrapper/
 
-# The .vscode folder contains launch configuration and tasks you configure in
-# VS Code which you may wish to be included in version control, so this line
-# is commented out by default.
-#.vscode/
+# Build configs (seguros - sem credenciais)
+!android/build.gradle.kts
+!android/settings.gradle.kts
+!android/gradle.properties
 
-# Flutter/Dart/Pub related
-**/doc/api/
-**/ios/Flutter/.last_build_id
-.dart_tool/
-.flutter-plugins-dependencies
-.pub-cache/
-.pub/
-/build/
-/coverage/
-
-# Symbolication related
-app.*.symbols
-
-# Obfuscation related
-app.*.map.json
-
-# Android Studio will place build artifacts here
-/android/app/debug
-/android/app/profile
-/android/app/release
+# App module
+!android/app/build.gradle.kts
+!android/app/proguard-rules.pro
+!android/app/src/
+!android/app/src/main/
+!android/app/src/main/AndroidManifest.xml
+!android/app/src/main/res/
+!android/app/src/main/kotlin/
+!android/app/src/main/java/

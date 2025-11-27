@@ -369,40 +369,61 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> with WidgetsBinding
           _buildStatusStep(
             icon: Icons.receipt_long,
             title: 'Pedido Recebido',
-            isActive: true,
-            isCompleted: _currentOrder.status != OrderStatus.pending,
+            isActive: _currentOrder.status == OrderStatus.pending,
+            isCompleted: _currentOrder.status == OrderStatus.accepted ||
+                _currentOrder.status == OrderStatus.preparing ||
+                _currentOrder.status == OrderStatus.ready ||
+                _currentOrder.status == OrderStatus.awaitingBatch ||
+                _currentOrder.status == OrderStatus.inBatch ||
+                _currentOrder.status == OrderStatus.outForDelivery ||
+                _currentOrder.status == OrderStatus.delivered,
           ),
           _buildStatusConnector(
-            isCompleted: _currentOrder.status != OrderStatus.pending,
+            isCompleted: _currentOrder.status == OrderStatus.accepted ||
+                _currentOrder.status == OrderStatus.preparing ||
+                _currentOrder.status == OrderStatus.ready ||
+                _currentOrder.status == OrderStatus.awaitingBatch ||
+                _currentOrder.status == OrderStatus.inBatch ||
+                _currentOrder.status == OrderStatus.outForDelivery ||
+                _currentOrder.status == OrderStatus.delivered,
           ),
           _buildStatusStep(
             icon: Icons.restaurant,
             title: 'Preparando',
-            isActive: _currentOrder.status == OrderStatus.preparing,
+            isActive: _currentOrder.status == OrderStatus.accepted ||
+                _currentOrder.status == OrderStatus.preparing,
             isCompleted: _currentOrder.status == OrderStatus.ready ||
+                _currentOrder.status == OrderStatus.awaitingBatch ||
+                _currentOrder.status == OrderStatus.inBatch ||
                 _currentOrder.status == OrderStatus.outForDelivery ||
                 _currentOrder.status == OrderStatus.delivered,
           ),
           _buildStatusConnector(
             isCompleted: _currentOrder.status == OrderStatus.ready ||
+                _currentOrder.status == OrderStatus.awaitingBatch ||
+                _currentOrder.status == OrderStatus.inBatch ||
                 _currentOrder.status == OrderStatus.outForDelivery ||
                 _currentOrder.status == OrderStatus.delivered,
           ),
           _buildStatusStep(
             icon: Icons.check_circle,
             title: 'Pronto',
-            isActive: _currentOrder.status == OrderStatus.ready,
-            isCompleted: _currentOrder.status == OrderStatus.outForDelivery ||
+            isActive: _currentOrder.status == OrderStatus.ready ||
+                _currentOrder.status == OrderStatus.awaitingBatch,
+            isCompleted: _currentOrder.status == OrderStatus.inBatch ||
+                _currentOrder.status == OrderStatus.outForDelivery ||
                 _currentOrder.status == OrderStatus.delivered,
           ),
           _buildStatusConnector(
-            isCompleted: _currentOrder.status == OrderStatus.outForDelivery ||
+            isCompleted: _currentOrder.status == OrderStatus.inBatch ||
+                _currentOrder.status == OrderStatus.outForDelivery ||
                 _currentOrder.status == OrderStatus.delivered,
           ),
           _buildStatusStep(
             icon: Icons.delivery_dining,
             title: 'A Caminho',
-            isActive: _currentOrder.status == OrderStatus.outForDelivery,
+            isActive: _currentOrder.status == OrderStatus.inBatch ||
+                _currentOrder.status == OrderStatus.outForDelivery,
             isCompleted: _currentOrder.status == OrderStatus.delivered,
           ),
           _buildStatusConnector(

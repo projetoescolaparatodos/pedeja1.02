@@ -216,7 +216,7 @@ class OrderStatusPusherService {
         return models.OrderStatus.ready;
       case 'a_caminho':
       case 'on_the_way':
-        return models.OrderStatus.onTheWay;
+        return models.OrderStatus.outForDelivery;
       case 'entregue':
       case 'delivered':
         return models.OrderStatus.delivered;
@@ -242,17 +242,29 @@ class OrderStatusPusherService {
         title = '🕒 Pedido Recebido';
         body = 'Seu pedido #${orderId.substring(0, 8)} foi recebido e está aguardando confirmação';
         break;
+      case models.OrderStatus.accepted:
+        title = '✅ Pedido Confirmado';
+        body = 'Seu pedido #${orderId.substring(0, 8)} foi confirmado e está sendo preparado!';
+        break;
       case models.OrderStatus.preparing:
         title = '👨‍🍳 Pedido em Preparo';
         body = 'Seu pedido #${orderId.substring(0, 8)} está sendo preparado!';
         break;
       case models.OrderStatus.ready:
-        title = '✅ Pedido Pronto';
+        title = '📦 Pedido Pronto';
         body = 'Seu pedido #${orderId.substring(0, 8)} está pronto!';
         break;
-      case models.OrderStatus.onTheWay:
-        title = '🚗 Pedido a Caminho';
-        body = 'Seu pedido #${orderId.substring(0, 8)} saiu para entrega!';
+      case models.OrderStatus.awaitingBatch:
+        title = '✋ Aguardando Entregador';
+        body = 'Seu pedido #${orderId.substring(0, 8)} está aguardando um entregador';
+        break;
+      case models.OrderStatus.inBatch:
+        title = '🚀 Saiu para Entrega';
+        body = 'Seu pedido #${orderId.substring(0, 8)} está com o entregador!';
+        break;
+      case models.OrderStatus.outForDelivery:
+        title = '🚴 Pedido a Caminho';
+        body = 'Seu pedido #${orderId.substring(0, 8)} está a caminho!';
         break;
       case models.OrderStatus.delivered:
         title = '🎉 Pedido Entregue';

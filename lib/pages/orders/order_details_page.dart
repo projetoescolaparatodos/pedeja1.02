@@ -380,29 +380,29 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> with WidgetsBinding
             title: 'Preparando',
             isActive: _currentOrder.status == OrderStatus.preparing,
             isCompleted: _currentOrder.status == OrderStatus.ready ||
-                _currentOrder.status == OrderStatus.onTheWay ||
+                _currentOrder.status == OrderStatus.outForDelivery ||
                 _currentOrder.status == OrderStatus.delivered,
           ),
           _buildStatusConnector(
             isCompleted: _currentOrder.status == OrderStatus.ready ||
-                _currentOrder.status == OrderStatus.onTheWay ||
+                _currentOrder.status == OrderStatus.outForDelivery ||
                 _currentOrder.status == OrderStatus.delivered,
           ),
           _buildStatusStep(
             icon: Icons.check_circle,
             title: 'Pronto',
             isActive: _currentOrder.status == OrderStatus.ready,
-            isCompleted: _currentOrder.status == OrderStatus.onTheWay ||
+            isCompleted: _currentOrder.status == OrderStatus.outForDelivery ||
                 _currentOrder.status == OrderStatus.delivered,
           ),
           _buildStatusConnector(
-            isCompleted: _currentOrder.status == OrderStatus.onTheWay ||
+            isCompleted: _currentOrder.status == OrderStatus.outForDelivery ||
                 _currentOrder.status == OrderStatus.delivered,
           ),
           _buildStatusStep(
             icon: Icons.delivery_dining,
             title: 'A Caminho',
-            isActive: _currentOrder.status == OrderStatus.onTheWay,
+            isActive: _currentOrder.status == OrderStatus.outForDelivery,
             isCompleted: _currentOrder.status == OrderStatus.delivered,
           ),
           _buildStatusConnector(

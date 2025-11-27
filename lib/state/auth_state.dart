@@ -29,7 +29,35 @@ class AuthState extends ChangeNotifier {
   String? get jwtToken => _authService.jwtToken;
 
   AuthState() {
-    // Escuta mudanças de autenticação do Firebase
+    _initAuth();
+  }
+
+  /// 🔄 Inicializar autenticação
+  Future<void> _initAuth() async {
+    // ✅ Primeiro: verificar se há sessão do Firebase
+    final currentUser = FirebaseAuth.instance.currentUser;
+    
+    if (currentUser != null) {
+      debugPrint('🔄 [AuthState] Sessão Firebase encontrada: ${currentUser.email}');
+      _currentUser = currentUser;
+      await _loadUserData();
+      await _saveLoginState(currentUser.email!);
+      
+      // 📦 Iniciar monitoramento de status de pedidos (Firestore)
+      OrderStatusListenerService.startListeningToUserOrders();
+      
+      // 📡 Iniciar monitoramento via Pusher (Real-time)
+      OrderStatusPusherService.initialize(
+        userId: currentUser.uid,
+        authToken: _authService.jwtToken,
+      );
+      
+      notifyListeners();
+    } else {
+      debugPrint('🔄 [AuthState] Nenhuma sessão Firebase encontrada');
+    }
+    
+    // ✅ Depois: escutar mudanças de autenticação
     FirebaseAuth.instance.authStateChanges().listen((User? user) {
       _currentUser = user;
       notifyListeners();
@@ -37,7 +65,7 @@ class AuthState extends ChangeNotifier {
       if (user != null) {
         debugPrint('🔔 [AuthState] Usuário logado: ${user.email}');
         _loadUserData();
-        _saveLoginState(user.email!); // ✅ Salvar estado de login
+        _saveLoginState(user.email!);
         
         // 📦 Iniciar monitoramento de status de pedidos (Firestore)
         OrderStatusListenerService.startListeningToUserOrders();
@@ -51,7 +79,7 @@ class AuthState extends ChangeNotifier {
         debugPrint('🔔 [AuthState] Usuário deslogado');
         _userData = null;
         _registrationComplete = false;
-        _clearLoginState(); // ✅ Limpar estado salvo
+        _clearLoginState();
         
         // 🛑 Parar monitoramento de pedidos
         OrderStatusListenerService.stopListeningToAllOrders();
@@ -61,9 +89,6 @@ class AuthState extends ChangeNotifier {
         OrderStatusPusherService.disconnect();
       }
     });
-    
-    // ✅ Tentar fazer auto-login ao iniciar
-    _tryAutoLogin();
   }
 
   /// 💾 Salvar estado de login
@@ -87,33 +112,6 @@ class AuthState extends ChangeNotifier {
       debugPrint('🗑️ [AuthState] Estado de login limpo');
     } catch (e) {
       debugPrint('❌ [AuthState] Erro ao limpar estado: $e');
-    }
-  }
-
-  /// 🔄 Tentar auto-login
-  Future<void> _tryAutoLogin() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final isLoggedIn = prefs.getBool('isLoggedIn') ?? false;
-      final userEmail = prefs.getString('userEmail');
-
-      if (isLoggedIn && userEmail != null) {
-        debugPrint('🔄 [AuthState] Tentando auto-login para: $userEmail');
-        
-        // Firebase já mantém a sessão, só precisamos recarregar os dados
-        final currentUser = FirebaseAuth.instance.currentUser;
-        if (currentUser != null) {
-          _currentUser = currentUser;
-          await _loadUserData();
-          debugPrint('✅ [AuthState] Auto-login bem-sucedido!');
-        } else {
-          // Sessão expirou, limpar dados salvos
-          await _clearLoginState();
-          debugPrint('⚠️ [AuthState] Sessão expirada, necessário fazer login novamente');
-        }
-      }
-    } catch (e) {
-      debugPrint('❌ [AuthState] Erro no auto-login: $e');
     }
   }
 

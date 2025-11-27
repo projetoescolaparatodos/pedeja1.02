@@ -48,7 +48,10 @@ dependencies:
   
   # URL Launcher (Mercado Pago Checkout)
   url_launcher: ^6.2.2
+  
+  # Vídeo
   video_player: ^2.8.2
+  flutter_cache_manager: ^3.3.1  # ✅ Cache de vídeos promocionais
 
 dev_dependencies:
   flutter_test:

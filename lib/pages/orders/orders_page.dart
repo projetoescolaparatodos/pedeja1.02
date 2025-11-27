@@ -450,22 +450,31 @@ class _OrdersPageState extends State<OrdersPage> with SingleTickerProviderStateM
     
     switch (status) {
       case OrderStatus.pending:
-        backgroundColor = const Color(0xFFE39110);
+        backgroundColor = const Color(0xFFFFA726); // Laranja
+        break;
+      case OrderStatus.accepted:
+        backgroundColor = const Color(0xFF66BB6A); // Verde claro
         break;
       case OrderStatus.preparing:
-        backgroundColor = Colors.orange;
+        backgroundColor = const Color(0xFF42A5F5); // Azul
         break;
       case OrderStatus.ready:
-        backgroundColor = Colors.purple;
+        backgroundColor = const Color(0xFF26A69A); // Teal
         break;
-      case OrderStatus.onTheWay:
-        backgroundColor = Colors.blue;
+      case OrderStatus.awaitingBatch:
+        backgroundColor = const Color(0xFFFFCA28); // Amarelo
+        break;
+      case OrderStatus.inBatch:
+        backgroundColor = const Color(0xFF7E57C2); // Roxo
+        break;
+      case OrderStatus.outForDelivery:
+        backgroundColor = const Color(0xFF29B6F6); // Azul claro
         break;
       case OrderStatus.delivered:
-        backgroundColor = Colors.green;
+        backgroundColor = const Color(0xFF66BB6A); // Verde
         break;
       case OrderStatus.cancelled:
-        backgroundColor = Colors.red;
+        backgroundColor = const Color(0xFFEF5350); // Vermelho
         break;
     }
 

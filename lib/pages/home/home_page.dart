@@ -1,16 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:badges/badges.dart' as badges;
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:async';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
 import '../../providers/catalog_provider.dart';
 import '../../models/restaurant_model.dart';
+import '../../models/promotion_model.dart';
 import '../../widgets/common/restaurant_card.dart';
 import '../../widgets/common/product_card.dart';
+import '../../widgets/home/promotional_carousel_item.dart';
 import '../categories/categories_page.dart';
 import '../restaurant/restaurant_detail_page.dart';
+import '../product/product_detail_page.dart'; // ✅ Import para navegação manual
 import '../../state/cart_state.dart';
 import '../cart/cart_page.dart';
 import '../profile/complete_profile_page.dart';
@@ -18,6 +19,7 @@ import '../orders/orders_page.dart';
 import '../auth/login_page.dart';
 import '../../core/services/operating_hours_service.dart';
 import '../../state/auth_state.dart';
+import '../../core/cache/video_cache_manager.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -26,16 +28,18 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   final ScrollController _scrollController = ScrollController();
   final TextEditingController _searchController = TextEditingController();
   final PageController _promoPageController = PageController();
+  final Map<int, GlobalKey<PromotionalCarouselItemState>> _carouselKeys = {}; // ✅ Keys para controlar vídeos
   
   String _searchQuery = '';
   bool _showLogo = true;
   Timer? _promoAutoPlayTimer;
   
-  late Future<List<Map<String, dynamic>>> _promotionsFuture;
+  late Future<List<PromotionModel>> _promotionsFuture;
+  int _currentPromoIndex = 0;
 
   // Categorias de farmácia/mercado para separação
   static const List<String> _pharmacyMarketCategories = [
@@ -58,14 +62,89 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this); // ✅ Observar ciclo de vida
     _promotionsFuture = _fetchPromotions();
     
-    // Auto-scroll para o carousel a cada 5 segundos
-    _promoAutoPlayTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
+    // ⏱️ Timer dinâmico (será cancelado e recriado quando vídeos terminarem)
+    _startAutoPlayTimer();
+
+    // ✅ Listener para pausar vídeos ao scroll
+    _scrollController.addListener(() {
+      setState(() {
+        _showLogo = _scrollController.offset < 380;
+      });
+      
+      // Pausar vídeos quando scroll passar da área de promoções (>300px)
+      if (_scrollController.offset > 300) {
+        _pauseAllVideos();
+      }
+    });
+
+    // ⚡ Carregar dados do catálogo em paralelo
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final catalog = context.read<CatalogProvider>();
+      // Carregar em paralelo para economizar tempo
+      Future.wait([
+        catalog.loadRestaurants(),
+        catalog.loadRandomProducts(),
+      ]);
+    });
+    
+    // ⚡ Pausar vídeos durante scroll ativo (não apenas ao passar de 300px)
+    _scrollController.addListener(_handleScrollForVideos);
+  }
+
+
+  
+  /// Pausa vídeos quando usuário está scrollando ativamente
+  void _handleScrollForVideos() {
+    if (_scrollController.position.isScrollingNotifier.value) {
+      _pauseAllVideos();
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this); // ✅ Remover observador
+    _pauseAllVideos(); // ✅ Pausar vídeos ao sair da página
+    _promoAutoPlayTimer?.cancel();
+    _scrollController.removeListener(_handleScrollForVideos); // ⚡ Remover listener
+    _scrollController.dispose();
+    _searchController.dispose();
+    _promoPageController.dispose();
+    super.dispose();
+  }
+
+  /// ✅ Detectar quando app vai para background OU quando navega para outra tela
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    
+    debugPrint('🔄 [HomePage] App lifecycle mudou: $state');
+    
+    if (state == AppLifecycleState.paused || 
+        state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.hidden) {
+      // App foi para background OU perdeu foco (navegação interna)
+      debugPrint('⏸️ [HomePage] App pausado/inativo - pausando vídeos');
+      _pauseAllVideos();
+      _promoAutoPlayTimer?.cancel();
+    } else if (state == AppLifecycleState.resumed) {
+      // App voltou para foreground
+      debugPrint('▶️ [HomePage] App retomado - iniciando timer');
+      _startAutoPlayTimer();
+    }
+  }
+
+  /// ✅ Inicia timer de autoplay (mínimo 45 segundos)
+  void _startAutoPlayTimer() {
+    _promoAutoPlayTimer?.cancel();
+    _promoAutoPlayTimer = Timer.periodic(const Duration(seconds: 45), (timer) {
       if (_promoPageController.hasClients) {
-        int nextPage = (_promoPageController.page?.toInt() ?? 0) + 1;
         _promotionsFuture.then((promos) {
-          if (nextPage >= promos.length) nextPage = 0;
+          if (promos.isEmpty) return;
+          
+          final nextPage = (_currentPromoIndex + 1) % promos.length;
           _promoPageController.animateToPage(
             nextPage,
             duration: const Duration(milliseconds: 400),
@@ -74,19 +153,33 @@ class _HomePageState extends State<HomePage> {
         });
       }
     });
+  }
 
-    // Listener para esconder/mostrar logo baseado no scroll
-    _scrollController.addListener(() {
-      setState(() {
-        _showLogo = _scrollController.offset < 380;
-      });
-    });
+  /// ✅ Pausa todos os vídeos
+  void _pauseAllVideos() {
+    for (var key in _carouselKeys.values) {
+      key.currentState?.pauseVideo();
+    }
+  }
 
-    // Carregar dados do catálogo
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final catalog = context.read<CatalogProvider>();
-      catalog.loadRestaurants();
-      catalog.loadRandomProducts(); // Carrega produtos da API
+  /// ✅ Callback quando vídeo termina
+  void _onVideoEnd() {
+    debugPrint('🏁 [HomePage] Vídeo terminou, avançando para próximo slide...');
+    _promoAutoPlayTimer?.cancel();
+    
+    // Avançar para próximo slide
+    _promotionsFuture.then((promos) {
+      if (promos.isEmpty) return;
+      
+      final nextPage = (_currentPromoIndex + 1) % promos.length;
+      _promoPageController.animateToPage(
+        nextPage,
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeInOut,
+      );
+      
+      // Reiniciar timer
+      _startAutoPlayTimer();
     });
   }
 
@@ -115,28 +208,63 @@ class _HomePageState extends State<HomePage> {
     debugPrint('✅ [HomePage] Refresh completo');
   }
 
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    _searchController.dispose();
-    _promoPageController.dispose();
-    _promoAutoPlayTimer?.cancel();
-    super.dispose();
+  Future<List<PromotionModel>> _fetchPromotions() async {
+    try {
+      debugPrint('🎯 [Promotions] Buscando promoções ativas...');
+      
+      // ✅ Buscar diretamente do Firestore
+      final now = DateTime.now();
+      final snapshot = await FirebaseFirestore.instance
+          .collection('promotions')
+          .where('isActive', isEqualTo: true)
+          .get();
+
+      // Filtrar promoções por data no código (não no Firestore)
+      final promotions = snapshot.docs
+          .map((doc) => PromotionModel.fromFirestore(doc.data(), doc.id))
+          .where((promo) {
+            try {
+              final isInPeriod = now.isAfter(promo.startDate) && now.isBefore(promo.endDate);
+              
+              if (isInPeriod) {
+                debugPrint('✅ [Promotion] ${promo.title} está ativa');
+              } else {
+                debugPrint('⏰ [Promotion] ${promo.title} fora do período');
+              }
+              
+              return isInPeriod;
+            } catch (e) {
+              debugPrint('❌ [Promotion] Erro ao verificar datas: $e');
+              return false;
+            }
+          })
+          .toList();
+
+      // Ordenar por prioridade
+      promotions.sort((a, b) => b.priority.compareTo(a.priority));
+
+      debugPrint('✅ [Promotions] ${promotions.length} promoções ativas encontradas');
+      
+      // 🚀 Pré-carregar vídeos em cache (não bloqueia UI)
+      _precacheVideos(promotions);
+      
+      return promotions;
+    } catch (e) {
+      debugPrint('❌ [Promotions] Erro ao carregar promoções: $e');
+      return [];
+    }
   }
 
-  Future<List<Map<String, dynamic>>> _fetchPromotions() async {
-    try {
-      final response = await http.get(
-        Uri.parse('https://api-pedeja.vercel.app/api/promotions/active'),
-      );
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        return List<Map<String, dynamic>>.from(data['data'] ?? []);
+  /// 🚀 Pré-carrega vídeos em segundo plano para transições fluidas
+  void _precacheVideos(List<PromotionModel> promotions) {
+    for (final promo in promotions) {
+      if (promo.isVideo) {
+        VideoCacheManager.precacheVideo(promo.mediaUrl).then((_) {
+          debugPrint('✅ [Cache] Vídeo pré-carregado: ${promo.title}');
+        }).catchError((e) {
+          debugPrint('⚠️ [Cache] Erro ao pré-carregar vídeo ${promo.title}: $e');
+        });
       }
-      return [];
-    } catch (e) {
-      debugPrint('Erro ao carregar promoções: $e');
-      return [];
     }
   }
 
@@ -147,6 +275,28 @@ class _HomePageState extends State<HomePage> {
       return r.name.toLowerCase().contains(query) ||
           r.address.toLowerCase().contains(query) ||
           (r.email?.toLowerCase().contains(query) ?? false);
+    }).toList();
+  }
+
+  /// ✅ Filtrar produtos de comida pela busca
+  List<dynamic> _filterFoodProducts(List<dynamic> products) {
+    if (_searchQuery.isEmpty) return products;
+    return products.where((p) {
+      final query = _searchQuery.toLowerCase();
+      return (p.name?.toLowerCase().contains(query) ?? false) ||
+          (p.description?.toLowerCase().contains(query) ?? false) ||
+          (p.category?.toLowerCase().contains(query) ?? false);
+    }).toList();
+  }
+
+  /// ✅ Filtrar produtos de farmácia pela busca
+  List<dynamic> _filterPharmacyProducts(List<dynamic> products) {
+    if (_searchQuery.isEmpty) return products;
+    return products.where((p) {
+      final query = _searchQuery.toLowerCase();
+      return (p.name?.toLowerCase().contains(query) ?? false) ||
+          (p.description?.toLowerCase().contains(query) ?? false) ||
+          (p.category?.toLowerCase().contains(query) ?? false);
     }).toList();
   }
 
@@ -165,8 +315,8 @@ class _HomePageState extends State<HomePage> {
               child: CustomScrollView(
                 controller: _scrollController,
                 physics: const AlwaysScrollableScrollPhysics(
-                  parent: BouncingScrollPhysics(),
-                ), // ✅ Permite pull-to-refresh
+                  parent: ClampingScrollPhysics(),
+                ), // ✅ Scroll suave com momentum/fling + pull-to-refresh
                 slivers: [
                 // Promotional Carousel
                 SliverToBoxAdapter(
@@ -225,7 +375,7 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildPromotionalCarousel() {
-    return FutureBuilder<List<Map<String, dynamic>>>(
+    return FutureBuilder<List<PromotionModel>>(
       future: _promotionsFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -273,98 +423,24 @@ class _HomePageState extends State<HomePage> {
               PageView.builder(
                 controller: _promoPageController,
                 itemCount: promotions.length,
+                onPageChanged: (index) {
+                  setState(() {
+                    _currentPromoIndex = index;
+                  });
+                },
                 itemBuilder: (context, index) {
-                  final promo = promotions[index];
-                  String imageUrl = promo['imageUrl'] ?? '';
+                  final promotion = promotions[index];
                   
-                  if (!imageUrl.startsWith('http')) {
-                    imageUrl = 'https://api-pedeja.vercel.app$imageUrl';
+                  // ✅ Criar key para controlar cada item
+                  if (!_carouselKeys.containsKey(index)) {
+                    _carouselKeys[index] = GlobalKey<PromotionalCarouselItemState>();
                   }
-
-                  return ClipRRect(
-                    borderRadius: const BorderRadius.only(
-                      bottomLeft: Radius.circular(24),
-                      bottomRight: Radius.circular(24),
-                    ),
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        CachedNetworkImage(
-                          imageUrl: imageUrl,
-                          fit: BoxFit.cover,
-                          placeholder: (context, url) => Container(
-                            color: const Color(0xFF022E28),
-                            child: const Center(
-                              child: CircularProgressIndicator(
-                                color: Color(0xFFE39110),
-                              ),
-                            ),
-                          ),
-                          errorWidget: (context, url, error) => Container(
-                            color: const Color(0xFF022E28),
-                            child: const Icon(
-                              Icons.image_not_supported,
-                              color: Colors.white54,
-                              size: 64,
-                            ),
-                          ),
-                        ),
-                        
-                        // Gradient overlay
-                        Container(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
-                              colors: [
-                                Colors.black.withValues(alpha: 0.35),
-                                Colors.black.withValues(alpha: 0.55),
-                              ],
-                            ),
-                          ),
-                        ),
-                        
-                        // Texto centralizado
-                        Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Text(
-                                promo['title'] ?? '',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.bold,
-                                  shadows: [
-                                    Shadow(
-                                      color: Colors.black.withValues(alpha: 0.8),
-                                      blurRadius: 8,
-                                    ),
-                                  ],
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                              const SizedBox(height: 12),
-                              Text(
-                                promo['description'] ?? '',
-                                style: TextStyle(
-                                  color: const Color(0xFFFFD27A),
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.bold,
-                                  shadows: [
-                                    Shadow(
-                                      color: Colors.black.withValues(alpha: 0.5),
-                                      blurRadius: 4,
-                                    ),
-                                  ],
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
+                  
+                  return PromotionalCarouselItem(
+                    key: _carouselKeys[index],
+                    promotion: promotion,
+                    isActive: _currentPromoIndex == index,
+                    onVideoEnd: _onVideoEnd, // ✅ Callback de fim de vídeo
                   );
                 },
               ),
@@ -376,28 +452,17 @@ class _HomePageState extends State<HomePage> {
                 child: Row(
                   children: List.generate(
                     promotions.length,
-                    (index) => AnimatedBuilder(
-                      animation: _promoPageController,
-                      builder: (context, child) {
-                        double selectedness = 1.0;
-                        if (_promoPageController.hasClients) {
-                          selectedness = ((_promoPageController.page ?? 0) - index).abs();
-                          selectedness = (1.0 - selectedness).clamp(0.0, 1.0);
-                        }
-                        
-                        return AnimatedContainer(
-                          duration: const Duration(milliseconds: 300),
-                          width: selectedness > 0.5 ? 16 : 16,
-                          height: 4,
-                          margin: const EdgeInsets.only(right: 4),
-                          decoration: BoxDecoration(
-                            color: selectedness > 0.5
-                                ? const Color(0xFFE39110)
-                                : Colors.white,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        );
-                      },
+                    (index) => AnimatedContainer(
+                      duration: const Duration(milliseconds: 300),
+                      width: _currentPromoIndex == index ? 16 : 16,
+                      height: 4,
+                      margin: const EdgeInsets.only(right: 4),
+                      decoration: BoxDecoration(
+                        color: _currentPromoIndex == index
+                            ? const Color(0xFFE39110)
+                            : Colors.white,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                     ),
                   ),
                 ),
@@ -550,20 +615,23 @@ class _HomePageState extends State<HomePage> {
                   
                   return SizedBox(
                     width: 260,
-                    child: RestaurantCard(
-                      restaurant: restaurant,
-                      width: 260,
-                      height: 160,
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => RestaurantDetailPage(
-                              restaurant: restaurant,
+                    child: RepaintBoundary(
+                      child: RestaurantCard(
+                        restaurant: restaurant,
+                        width: 260,
+                        height: 160,
+                        onTap: () {
+                          _pauseAllVideos(); // ✅ Pausar vídeos ao navegar
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => RestaurantDetailPage(
+                                restaurant: restaurant,
+                              ),
                             ),
-                          ),
-                        );
-                      },
+                          );
+                        },
+                      ),
                     ),
                   );
                 },
@@ -588,10 +656,13 @@ class _HomePageState extends State<HomePage> {
           );
         }).toList();
 
+        // ✅ Aplica filtro de busca
+        final searchFilteredProducts = _filterFoodProducts(foodProducts);
+
         // Aplica filtro de categoria selecionada
         final filteredProducts = catalog.selectedCategory == 'Todos'
-            ? foodProducts
-            : foodProducts.where((p) => p.category == catalog.selectedCategory).toList();
+            ? searchFilteredProducts
+            : searchFilteredProducts.where((p) => p.category == catalog.selectedCategory).toList();
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -698,12 +769,25 @@ class _HomePageState extends State<HomePage> {
             
             // Carrossel de produtos de comida
             else if (filteredProducts.isEmpty)
-              const Center(
+              Center(
                 child: Padding(
-                  padding: EdgeInsets.all(32),
-                  child: Text(
-                    'Nenhum produto encontrado',
-                    style: TextStyle(fontSize: 16, color: Colors.white70),
+                  padding: const EdgeInsets.all(32),
+                  child: Column(
+                    children: [
+                      const Icon(
+                        Icons.search_off,
+                        size: 64,
+                        color: Color(0xFFE39110),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        _searchQuery.isNotEmpty 
+                            ? 'Nenhum produto encontrado para "$_searchQuery"'
+                            : 'Nenhum produto encontrado',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontSize: 16, color: Colors.white70),
+                      ),
+                    ],
                   ),
                 ),
               )
@@ -733,10 +817,13 @@ class _HomePageState extends State<HomePage> {
           return const SizedBox.shrink();
         }
 
+        // ✅ Aplica filtro de busca
+        final searchFilteredProducts = _filterPharmacyProducts(pharmacyProducts);
+
         // Aplica filtro de categoria selecionada
         final filteredProducts = catalog.selectedCategory == 'Todos'
-            ? pharmacyProducts
-            : pharmacyProducts.where((p) => p.category == catalog.selectedCategory).toList();
+            ? searchFilteredProducts
+            : searchFilteredProducts.where((p) => p.category == catalog.selectedCategory).toList();
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -847,12 +934,25 @@ class _HomePageState extends State<HomePage> {
             
             // Carrossel de produtos de farmácia
             else if (filteredProducts.isEmpty)
-              const Center(
+              Center(
                 child: Padding(
-                  padding: EdgeInsets.all(32),
-                  child: Text(
-                    'Nenhum produto encontrado',
-                    style: TextStyle(fontSize: 16, color: Colors.white70),
+                  padding: const EdgeInsets.all(32),
+                  child: Column(
+                    children: [
+                      const Icon(
+                        Icons.search_off,
+                        size: 64,
+                        color: Color(0xFFE39110),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        _searchQuery.isNotEmpty 
+                            ? 'Nenhum produto encontrado para "$_searchQuery"'
+                            : 'Nenhum produto encontrado',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontSize: 16, color: Colors.white70),
+                      ),
+                    ],
                   ),
                 ),
               )
@@ -898,12 +998,24 @@ class _HomePageState extends State<HomePage> {
                 paymentStatus: 'adimplente',
               ),
             );
-            return ProductCard(
-              product: product,
-              restaurantName: restaurantName,
-              hero: true,
-              heroTag: 'product_${product.id}',
-              isRestaurantOpen: restaurant.isOpen,
+            return RepaintBoundary(
+              child: ProductCard(
+                product: product,
+                restaurantName: restaurantName,
+                hero: true,
+                heroTag: 'product_${product.id}',
+                isRestaurantOpen: restaurant.isOpen,
+                onTap: () {
+                  debugPrint('🎬 [HomePage] Produto clicado - pausando vídeos!');
+                  _pauseAllVideos(); // ✅ Pausar vídeos antes de navegar
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => ProductDetailPage(product: product),
+                    ),
+                  );
+                },
+              ),
             );
           },
         ),
@@ -963,12 +1075,23 @@ class _HomePageState extends State<HomePage> {
                             paymentStatus: 'adimplente',
                           ),
                         );
-                        return ProductCard(
-                          product: product,
-                          restaurantName: restaurantName,
-                          hero: true,
-                          heroTag: 'product_page${pageIndex}_${product.id}',
-                          isRestaurantOpen: restaurant.isOpen,
+                        return RepaintBoundary(
+                          child: ProductCard(
+                            product: product,
+                            restaurantName: restaurantName,
+                            hero: true,
+                            heroTag: 'product_page${pageIndex}_${product.id}',
+                            isRestaurantOpen: restaurant.isOpen,
+                            onTap: () {
+                              _pauseAllVideos(); // ✅ Pausar vídeos antes de navegar
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => ProductDetailPage(product: product),
+                                ),
+                              );
+                            },
+                          ),
                         );
                       },
                     ),
@@ -1067,6 +1190,7 @@ class _HomePageState extends State<HomePage> {
                     ),
                     secondChild: TextButton.icon(
                       onPressed: () {
+                        _pauseAllVideos(); // ✅ Pausar vídeos ao navegar
                         Navigator.push(
                           context,
                           MaterialPageRoute(
@@ -1260,6 +1384,7 @@ class _HomePageState extends State<HomePage> {
                       icon: Icons.person,
                       title: 'Editar Perfil',
                       onTap: () async {
+                        _pauseAllVideos(); // ✅ Pausar vídeos ao navegar
                         Navigator.pop(context);
                         Navigator.push(
                           context,
@@ -1273,6 +1398,7 @@ class _HomePageState extends State<HomePage> {
                       icon: Icons.receipt_long,
                       title: 'Meus Pedidos',
                       onTap: () {
+                        _pauseAllVideos(); // ✅ Pausar vídeos ao navegar
                         Navigator.pop(context);
                         Navigator.push(
                           context,

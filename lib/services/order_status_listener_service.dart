@@ -116,7 +116,7 @@ class OrderStatusListenerService {
         body = 'Seu pedido #$shortOrderId está pronto para ser retirado ou entregue!';
         break;
         
-      case models.OrderStatus.onTheWay: // ✨ Notificação para "Saiu para Entrega"
+      case models.OrderStatus.outForDelivery: // ✨ Notificação para "Saiu para Entrega"
         title = '🚗 Pedido Saiu para Entrega!';
         body = 'Seu pedido #$shortOrderId está a caminho! Aguarde na localização de entrega.';
         break;

@@ -235,12 +235,15 @@ class Order {
 
 /// Status do pedido
 enum OrderStatus {
-  pending('pending', 'Pendente'),
-  preparing('preparing', 'Preparando'),
-  ready('ready', 'Pronto'),
-  onTheWay('on_the_way', 'A Caminho'),
-  delivered('delivered', 'Entregue'),
-  cancelled('cancelled', 'Cancelado');
+  pending('pending', 'Processando pagamento'),           // Aguardando pagamento
+  accepted('accepted', 'Pedido confirmado'),             // Pronto pra produzir ✅
+  preparing('preparing', 'Preparando seu pedido'),       // Em preparação 👨‍🍳
+  ready('ready', 'Pronto!'),                             // Pronto para retirada/entrega 📦
+  awaitingBatch('awaiting_batch', 'Aguardando entregador'), // Aguardando lote ✋
+  inBatch('in_batch', 'Saiu para entrega'),              // Em lote com entregador ✅
+  outForDelivery('out_for_delivery', 'A caminho'),       // A caminho 🚴
+  delivered('delivered', 'Entregue!'),                   // Entregue ✅
+  cancelled('cancelled', 'Cancelado');                   // Cancelado ❌
 
   final String value;
   final String label;
@@ -249,27 +252,39 @@ enum OrderStatus {
 
   static OrderStatus fromString(String value) {
     // ✅ Suportar valores em português e inglês
-    final normalizedValue = value.toLowerCase().trim();
+    final normalizedValue = value.toLowerCase().trim().replaceAll(' ', '_');
     
     switch (normalizedValue) {
       case 'pending':
       case 'pendente':
         return OrderStatus.pending;
+      case 'accepted':
+      case 'aceito':
+      case 'confirmado':
+        return OrderStatus.accepted;
       case 'preparing':
       case 'preparando':
       case 'em_preparo':
-      case 'em preparo': // ✨ Nova variação
+      case 'em_preparação':
         return OrderStatus.preparing;
       case 'ready':
       case 'pronto':
         return OrderStatus.ready;
+      case 'awaiting_batch':
+      case 'aguardando_lote':
+      case 'aguardando_entregador':
+        return OrderStatus.awaitingBatch;
+      case 'in_batch':
+      case 'em_lote':
+      case 'com_entregador':
+        return OrderStatus.inBatch;
+      case 'out_for_delivery':
       case 'on_the_way':
       case 'ontheway':
       case 'a_caminho':
       case 'delivering':
-      case 'saiu para entrega': // ✨ Nova variação
-      case 'saiu_para_entrega': // ✨ Nova variação
-        return OrderStatus.onTheWay;
+      case 'saiu_para_entrega':
+        return OrderStatus.outForDelivery;
       case 'delivered':
       case 'entregue':
         return OrderStatus.delivered;
@@ -279,6 +294,54 @@ enum OrderStatus {
       default:
         debugPrint('⚠️ [OrderStatus] Status desconhecido: $value, usando pending');
         return OrderStatus.pending;
+    }
+  }
+  
+  /// 🎨 Retorna a cor apropriada para cada status
+  static int getColor(OrderStatus status) {
+    switch (status) {
+      case OrderStatus.pending:
+        return 0xFFFFA726; // Laranja - aguardando
+      case OrderStatus.accepted:
+        return 0xFF66BB6A; // Verde claro - confirmado
+      case OrderStatus.preparing:
+        return 0xFF42A5F5; // Azul - preparando
+      case OrderStatus.ready:
+        return 0xFF26A69A; // Teal - pronto
+      case OrderStatus.awaitingBatch:
+        return 0xFFFFCA28; // Amarelo - aguardando
+      case OrderStatus.inBatch:
+        return 0xFF7E57C2; // Roxo - em lote
+      case OrderStatus.outForDelivery:
+        return 0xFF29B6F6; // Azul claro - a caminho
+      case OrderStatus.delivered:
+        return 0xFF66BB6A; // Verde - entregue
+      case OrderStatus.cancelled:
+        return 0xFFEF5350; // Vermelho - cancelado
+    }
+  }
+  
+  /// 📍 Retorna o ícone apropriado para cada status
+  static String getIcon(OrderStatus status) {
+    switch (status) {
+      case OrderStatus.pending:
+        return '⏳'; // Aguardando pagamento
+      case OrderStatus.accepted:
+        return '✅'; // Confirmado
+      case OrderStatus.preparing:
+        return '👨‍🍳'; // Preparando
+      case OrderStatus.ready:
+        return '📦'; // Pronto
+      case OrderStatus.awaitingBatch:
+        return '✋'; // Aguardando entregador
+      case OrderStatus.inBatch:
+        return '🚀'; // Em lote
+      case OrderStatus.outForDelivery:
+        return '🚴'; // A caminho
+      case OrderStatus.delivered:
+        return '🎉'; // Entregue
+      case OrderStatus.cancelled:
+        return '❌'; // Cancelado
     }
   }
 }

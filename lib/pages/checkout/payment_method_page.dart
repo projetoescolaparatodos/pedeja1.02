@@ -6,6 +6,7 @@ import '../../services/backend_order_service.dart';
 import '../../state/auth_state.dart';
 import '../../state/cart_state.dart';
 import '../payment/pix_payment_page.dart';
+import '../payment/card_checkout_page.dart'; // ✅ Checkout Pro
 import '../orders/orders_page.dart';
 
 /// Página de seleção do método de pagamento
@@ -130,8 +131,14 @@ class _PaymentMethodPageState extends State<PaymentMethodPage> {
       }).toList();
 
       // 4. Preparar dados de pagamento para a API
+      // Backend espera: 'pix', 'card' ou 'cash'
+      String apiPaymentMethod = _selectedMethod!;
+      if (_selectedMethod == 'credit_card' || _selectedMethod == 'debit_card') {
+        apiPaymentMethod = 'card'; // ✅ Converter credit_card/debit_card para 'card'
+      }
+      
       Map<String, dynamic> paymentData = {
-        'method': _selectedMethod,
+        'method': apiPaymentMethod,
       };
       
       if (_selectedMethod == 'cash') {
@@ -168,10 +175,13 @@ class _PaymentMethodPageState extends State<PaymentMethodPage> {
 
       debugPrint('✅ Pedido criado via API: $orderId');
 
-      // 7. Limpar carrinho
+      // 7. Salvar total ANTES de limpar carrinho
+      final totalAmount = cartState.total;
+
+      // 8. Limpar carrinho
       cartState.clear();
 
-      // 8. Redirecionar conforme método
+      // 9. Redirecionar conforme método
       if (mounted) {
         if (_selectedMethod == 'cash') {
           // Pedido em dinheiro - vai direto para pedidos
@@ -191,14 +201,26 @@ class _PaymentMethodPageState extends State<PaymentMethodPage> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
-                '✅ Pedido confirmado! Pague R\$ ${cartState.total.toStringAsFixed(2)} na entrega$changeMessage',
+                '✅ Pedido confirmado! Pague R\$ ${totalAmount.toStringAsFixed(2)} na entrega$changeMessage',
               ),
               backgroundColor: Colors.green,
               duration: const Duration(seconds: 5),
             ),
           );
+        } else if (_selectedMethod == 'credit_card' || _selectedMethod == 'debit_card') {
+          // Cartão de Crédito/Débito - Checkout Pro do Mercado Pago
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (_) => CardCheckoutPage(
+                orderId: orderId,
+                totalAmount: totalAmount, // ✅ Usar valor salvo
+                userEmail: userData['email'] ?? '',
+              ),
+            ),
+          );
         } else {
-          // PIX ou Cartão - vai para tela de pagamento
+          // PIX - vai para tela de pagamento PIX
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(
@@ -296,9 +318,8 @@ class _PaymentMethodPageState extends State<PaymentMethodPage> {
                   _buildPaymentOption(
                     icon: Icons.credit_card,
                     title: 'Cartão de Crédito',
-                    subtitle: 'Pague em até 12x',
+                    subtitle: 'Pague com segurança via Mercado Pago',
                     value: 'credit_card',
-                    isDisabled: true,
                   ),
                   
                   const SizedBox(height: 16),
@@ -306,9 +327,8 @@ class _PaymentMethodPageState extends State<PaymentMethodPage> {
                   _buildPaymentOption(
                     icon: Icons.credit_card_outlined,
                     title: 'Cartão de Débito',
-                    subtitle: 'Pagamento à vista',
+                    subtitle: 'Pagamento à vista via Mercado Pago',
                     value: 'debit_card',
-                    isDisabled: true,
                   ),
                   
                   // Mensagem de erro

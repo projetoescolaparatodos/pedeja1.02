@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'firebase_options.dart';
 import 'core/services/operating_hours_service.dart';
@@ -23,18 +24,26 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
+  debugPrint('🚀 [MAIN] App iniciando...');
+  
   // 🔥 Inicializar Firebase
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
-  debugPrint('🔥 Firebase inicializado com sucesso');
+  debugPrint('🔥 [MAIN] Firebase inicializado com sucesso');
+  
+  // 🔍 DEBUG: Verificar se há usuário autenticado ANTES de qualquer outra coisa
+  final currentUser = FirebaseAuth.instance.currentUser;
+  if (currentUser != null) {
+    debugPrint('✅ [MAIN] Usuário encontrado no Firebase Auth: ${currentUser.email}');
+    debugPrint('✅ [MAIN] UID: ${currentUser.uid}');
+    debugPrint('✅ [MAIN] Email verificado: ${currentUser.emailVerified}');
+  } else {
+    debugPrint('❌ [MAIN] Nenhum usuário autenticado encontrado no Firebase Auth');
+  }
 
-  // � Configurar persistência do Firebase Auth
-  // O Firebase Auth já mantém a sessão por padrão no mobile/web
-  // Não precisa de configuração adicional!
-
-  // �🔔 Configurar handler de notificações em background
+  // 🔔 Configurar handler de notificações em background
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
   // 🔔 Inicializar serviço de notificações

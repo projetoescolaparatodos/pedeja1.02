@@ -40,7 +40,10 @@ class _OrdersPageState extends State<OrdersPage> with SingleTickerProviderStateM
 
     try {
       final authState = Provider.of<AuthState>(context, listen: false);
-      final userId = authState.currentUser?.uid;
+      // ✅ Tentar obter ID do usuário do Firebase ou dos dados carregados da API
+      final userId = authState.currentUser?.uid ?? 
+                     authState.userData?['id'] ?? 
+                     authState.userData?['uid'];
 
       if (userId == null) {
         throw Exception('Usuário não autenticado');

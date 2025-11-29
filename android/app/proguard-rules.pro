@@ -21,6 +21,18 @@
 -keep class androidx.preference.** { *; }
 -keep class android.content.SharedPreferences { *; }
 -keep class * implements android.content.SharedPreferences { *; }
+-keep class android.content.SharedPreferences$Editor { *; }
+
+# Keep shared_preferences plugin
+-keep class io.flutter.plugins.sharedpreferences.** { *; }
+-keepclassmembers class io.flutter.plugins.sharedpreferences.** { *; }
+
+# Keep all Android storage classes
+-keep class android.content.Context { *; }
+-keep class android.content.ContextWrapper { *; }
+-keepclassmembers class * extends android.content.Context {
+    public android.content.SharedPreferences getSharedPreferences(java.lang.String, int);
+}
 
 # Keep Google Play Core classes
 -dontwarn com.google.android.play.core.**

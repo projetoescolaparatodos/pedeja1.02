@@ -123,6 +123,7 @@ class BackendOrderService {
 
   /// Enviar mensagem de chat via backend (backend deve repassar ao Pusher)
   Future<void> sendChatMessage({
+    required String token, // ✅ Token obrigatório
     required String orderId,
     required String message,
     required String senderName,
@@ -141,6 +142,7 @@ class BackendOrderService {
       final response = await http.post(
         Uri.parse('$apiUrl/api/orders/$orderId/messages'),
         headers: {
+          'Authorization': 'Bearer $token', // ✅ Header de autorização adicionado
           'Content-Type': 'application/json',
         },
         body: json.encode(body),

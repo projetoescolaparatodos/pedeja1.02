@@ -23,7 +23,8 @@ class AuthState extends ChangeNotifier {
   Map<String, dynamic>? get restaurantData => _restaurantData;
   bool get isLoading => _isLoading;
   String? get error => _error;
-  bool get isAuthenticated => _currentUser != null;
+  // ✅ Alterado para considerar token JWT também
+  bool get isAuthenticated => _currentUser != null || _authService.jwtToken != null;
   bool get registrationComplete => _registrationComplete;
   bool get isPartner => _restaurantData != null;
   String? get jwtToken => _authService.jwtToken;
@@ -34,59 +35,72 @@ class AuthState extends ChangeNotifier {
 
   /// 🔄 Inicializar autenticação
   Future<void> _initAuth() async {
-    // ✅ Primeiro: verificar se há sessão do Firebase
-    final currentUser = FirebaseAuth.instance.currentUser;
+    debugPrint('🔧 [AuthState] _initAuth() chamado - Iniciando auto-login manual');
     
-    if (currentUser != null) {
-      debugPrint('🔄 [AuthState] Sessão Firebase encontrada: ${currentUser.email}');
-      _currentUser = currentUser;
-      await _loadUserData();
-      await _saveLoginState(currentUser.email!);
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      // 1️⃣ Tentar carregar credenciais salvas manualmente
+      final hasCredentials = await _authService.loadSavedCredentials();
       
-      // 📦 Iniciar monitoramento de status de pedidos (Firestore)
-      OrderStatusListenerService.startListeningToUserOrders();
+      if (hasCredentials) {
+        debugPrint('✅ [AuthState] Credenciais manuais encontradas');
+        
+        // Tentar obter usuário atual do Firebase (pode ser null se não persistiu)
+        // Se for null, mas temos token, podemos tentar "re-autenticar" ou apenas usar o token para API
+        // Por enquanto, vamos confiar no Firebase se ele estiver lá, ou usar o estado manual
+        
+        final currentUser = FirebaseAuth.instance.currentUser;
+        if (currentUser != null) {
+          _currentUser = currentUser;
+          debugPrint('✅ [AuthState] Usuário Firebase também encontrado: ${currentUser.email}');
+        } else {
+          debugPrint('⚠️ [AuthState] Usuário Firebase é NULL, mas temos credenciais salvas');
+          // Aqui poderíamos tentar um signInWithCustomToken se tivéssemos salvo, 
+          // ou apenas confiar que o token JWT está válido para chamadas de API.
+          // Para UI, precisamos de um objeto User ou simular um.
+          // Como _currentUser é User?, não podemos instanciar User diretamente facilmente.
+          // Vamos manter _currentUser como null mas isAuthenticated como true se mudarmos a lógica do getter.
+          // Mas o getter isAuthenticated depende de _currentUser != null.
+          
+          // SOLUÇÃO: Se temos credenciais mas Firebase está deslogado, 
+          // o ideal seria tentar re-autenticar silenciosamente ou forçar login.
+          // Mas como o problema é persistência, vamos assumir que o usuário ESTÁ logado
+          // e tentar carregar os dados dele via API usando o token salvo.
+        }
+
+        // Carregar dados do usuário da API
+        await _loadUserData();
+        
+        // Se conseguimos carregar dados, consideramos logado
+        if (_userData != null) {
+             debugPrint('✅ [AuthState] Dados do usuário carregados via API/Cache');
+             
+             // Se _currentUser for null, isso é um problema para widgets que dependem dele.
+             // Mas para a lógica de "estar logado", o que importa é ter acesso.
+        }
+      } else {
+        debugPrint('❌ [AuthState] Nenhuma credencial manual encontrada');
+      }
       
-      // 📡 Iniciar monitoramento via Pusher (Real-time)
-      OrderStatusPusherService.initialize(
-        userId: currentUser.uid,
-        authToken: _authService.jwtToken,
-      );
-      
+    } catch (e) {
+      debugPrint('❌ [AuthState] Erro ao inicializar auth: $e');
+    } finally {
+      _isLoading = false;
       notifyListeners();
-    } else {
-      debugPrint('🔄 [AuthState] Nenhuma sessão Firebase encontrada');
     }
     
-    // ✅ Depois: escutar mudanças de autenticação
+    // Manter listener do Firebase apenas para sincronizar se algo mudar externamente
     FirebaseAuth.instance.authStateChanges().listen((User? user) {
-      _currentUser = user;
-      notifyListeners();
-      
+      debugPrint('🔔 [AuthState] authStateChanges: ${user?.email}');
       if (user != null) {
-        debugPrint('🔔 [AuthState] Usuário logado: ${user.email}');
-        _loadUserData();
-        _saveLoginState(user.email!);
-        
-        // 📦 Iniciar monitoramento de status de pedidos (Firestore)
-        OrderStatusListenerService.startListeningToUserOrders();
-        
-        // 📡 Iniciar monitoramento via Pusher (Real-time)
-        OrderStatusPusherService.initialize(
-          userId: user.uid,
-          authToken: _authService.jwtToken,
-        );
-      } else {
-        debugPrint('🔔 [AuthState] Usuário deslogado');
-        _userData = null;
-        _registrationComplete = false;
-        _clearLoginState();
-        
-        // 🛑 Parar monitoramento de pedidos
-        OrderStatusListenerService.stopListeningToAllOrders();
-        OrderStatusListenerService.clearCache();
-        
-        // 🛑 Desconectar Pusher
-        OrderStatusPusherService.disconnect();
+        _currentUser = user;
+        // Salvar credenciais novamente para garantir
+        if (user.email != null && _authService.jwtToken != null) {
+             _authService.saveCredentials(user.email!, _authService.jwtToken!);
+        }
+        notifyListeners();
       }
     });
   }
@@ -146,8 +160,12 @@ class AuthState extends ChangeNotifier {
         
         // 🔔 Registrar token FCM após login bem-sucedido
         if (_authService.jwtToken != null) {
-          await NotificationService.updateAuthToken(_authService.jwtToken!);
-          debugPrint('🔔 [AuthState] Token FCM atualizado após login');
+          final userId = _userData?['id'] ?? _userData?['uid'];
+          await NotificationService.updateAuthToken(
+            _authService.jwtToken!,
+            userId: userId,
+          );
+          debugPrint('🔔 [AuthState] Token FCM atualizado após login (User ID: $userId)');
         }
         
         // 📦 Iniciar monitoramento de status de pedidos
@@ -207,8 +225,12 @@ class AuthState extends ChangeNotifier {
         
         // 🔔 Registrar token FCM após cadastro bem-sucedido
         if (_authService.jwtToken != null) {
-          await NotificationService.updateAuthToken(_authService.jwtToken!);
-          debugPrint('🔔 [AuthState] Token FCM atualizado após cadastro');
+          final userId = _userData?['id'] ?? _userData?['uid'];
+          await NotificationService.updateAuthToken(
+            _authService.jwtToken!,
+            userId: userId,
+          );
+          debugPrint('🔔 [AuthState] Token FCM atualizado após cadastro (User ID: $userId)');
         }
         
         // 📦 Iniciar monitoramento de status de pedidos
@@ -297,10 +319,16 @@ class AuthState extends ChangeNotifier {
       
       if (!tokenRenewed) {
         debugPrint('❌ [AuthState] Falha ao renovar token JWT');
-        return;
+        
+        // ✅ FIX: Se já temos um token (carregado manualmente), não devemos abortar.
+        if (_authService.jwtToken != null) {
+          debugPrint('⚠️ [AuthState] Usando token JWT salvo manualmente');
+        } else {
+          return;
+        }
+      } else {
+        debugPrint('✅ [AuthState] JWT token renovado com sucesso');
       }
-      
-      debugPrint('✅ [AuthState] JWT token renovado com sucesso');
       
       // Agora verifica se o cadastro está completo
       final isComplete = await _authService.checkRegistrationComplete();
@@ -310,6 +338,25 @@ class AuthState extends ChangeNotifier {
       
       debugPrint('📋 [AuthState] Dados carregados - Complete: $isComplete');
       debugPrint('👤 [AuthState] userData: $_userData');
+      
+      // ✅ Inicializar Pusher para notificações em tempo real
+      if (_userData != null && _authService.jwtToken != null) {
+        final userId = _userData!['id'] ?? _userData!['uid'];
+        if (userId != null) {
+          debugPrint('📡 [AuthState] Inicializando Pusher para usuário: $userId');
+          await OrderStatusPusherService.initialize(
+            userId: userId,
+            authToken: _authService.jwtToken,
+          );
+          
+          // ✅ CRÍTICO: Registrar FCM token no backend após auto-login
+          debugPrint('🔔 [AuthState] Registrando FCM token após auto-login');
+          await NotificationService.updateAuthToken(
+            _authService.jwtToken!,
+            userId: userId,
+          );
+        }
+      }
       
       notifyListeners();
     } catch (e) {
@@ -344,6 +391,9 @@ class AuthState extends ChangeNotifier {
     // 🛑 Parar monitoramento de pedidos
     await OrderStatusListenerService.stopListeningToAllOrders();
     OrderStatusListenerService.clearCache();
+
+    // 🛑 Desconectar Pusher
+    await OrderStatusPusherService.disconnect();
 
     await _authService.signOut();
     

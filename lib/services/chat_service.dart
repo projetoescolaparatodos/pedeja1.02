@@ -4,6 +4,7 @@ import 'package:pusher_channels_flutter/pusher_channels_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'backend_order_service.dart';
 import 'notification_service.dart';
+import 'order_status_pusher_service.dart'; // ✅ Import adicionado
 
 /// 💬 Modelo de mensagem do chat
 class ChatMessage {
@@ -60,6 +61,9 @@ class ChatService {
   
   // Lista de canais ativos
   static final Set<String> _activeChannels = {};
+  
+  // ✅ ID do pedido com chat atualmente aberto (para suprimir notificações)
+  static String? _activeOrderId;
 
   /// Configuração do Pusher
   static const String _apiKey = '45b7798e358505a8343e';
@@ -68,6 +72,12 @@ class ChatService {
   /// Chave para SharedPreferences
   static const String _storagePrefix = 'chat_messages_';
   static const Duration _cacheExpiration = Duration(days: 7); // Mensagens duram 7 dias
+
+  /// Definir qual pedido tem chat ativo (para suprimir notificações)
+  static void setActiveChatOrder(String? orderId) {
+    _activeOrderId = orderId;
+    debugPrint('💬 [ChatService] Chat ativo definido: ${orderId ?? "nenhum"}');
+  }
 
   /// Inicializar Pusher e conectar ao canal do pedido
   static Future<void> initialize({
@@ -89,6 +99,12 @@ class ChatService {
       // ✅ Salvar nome do restaurante para notificações
       if (restaurantName != null) {
         _restaurantNames[orderId] = restaurantName;
+      }
+
+      // ✅ Verificar se já foi inicializado por outro serviço
+      if (!_initialized && OrderStatusPusherService.isInitialized) {
+        debugPrint('💬 [ChatService] Pusher já inicializado pelo OrderStatusPusherService');
+        _initialized = true;
       }
 
       if (!_initialized) {
@@ -203,19 +219,27 @@ class ChatService {
               debugPrint('⚠️ [ChatService] Erro ao salvar mensagem no storage (continuando): $e');
             });
             
-            // ✅ Disparar notificação se NÃO for mensagem própria e for do restaurante
-            if (!message.isMe && message.isRestaurant) {
+            // ✅ Disparar notificação se NÃO for mensagem própria, for do restaurante
+            // E se o usuário NÃO estiver vendo o chat deste pedido
+            if (!message.isMe && message.isRestaurant && _activeOrderId != orderId) {
               debugPrint('🔔 [ChatService] Disparando notificação de nova mensagem');
               final restaurantName = _restaurantNames[orderId] ?? 'Restaurante';
               NotificationService.showChatNotification(
                 orderId: orderId,
-                senderName: restaurantName, // ✅ Usar nome do restaurante
+                senderName: restaurantName,
                 messageText: message.message,
               );
+            } else if (_activeOrderId == orderId) {
+              debugPrint('💬 [ChatService] Chat ativo - notificação suprimida');
             }
             
-            // Notificar callback se existir
-            _messageCallbacks[orderId]?.call(message);
+            // Notificar callback se existir (proteger contra chamadas após dispose)
+            try {
+              _messageCallbacks[orderId]?.call(message);
+            } catch (e) {
+              debugPrint('⚠️ [ChatService] Erro ao chamar callback (página provavelmente fechada): $e');
+              // Não propagar erro - página já foi fechada
+            }
           } else {
             debugPrint('⚠️ [ChatService] Evento ignorado ou sem data');
           }
@@ -238,7 +262,7 @@ class ChatService {
     required String message,
     required String userName,
     required String userId,
-    String? jwtToken,
+    required String jwtToken, // ✅ Token obrigatório
   }) async {
     try {
       if (message.trim().isEmpty) return;
@@ -248,6 +272,7 @@ class ChatService {
       // Enviar mensagem através do backend (backend fará o trigger no Pusher)
       final backend = BackendOrderService();
       await backend.sendChatMessage(
+        token: jwtToken, // ✅ Passando token
         orderId: orderId,
         message: message,
         senderName: userName,

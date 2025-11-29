@@ -15,6 +15,9 @@ class OrderStatusPusherService {
   static String? _currentUserId;
   static String? _currentChannelName;
   
+  // ✅ Getter para verificar inicialização externa
+  static bool get isInitialized => _initialized;
+  
   // Callbacks para atualização da UI
   static Function(String orderId, models.OrderStatus status)? onStatusUpdate;
 
@@ -276,12 +279,12 @@ class OrderStatusPusherService {
         break;
     }
 
-    NotificationService.showOrderStatusNotification(
-      orderId: orderId,
-      status: status,
-      title: title,
-      body: body,
-    );
+    // ✅ REMOVIDO: Não dispara notificação local aqui para evitar duplicatas
+    // O backend envia via FCM, Pusher serve apenas para atualização de UI em tempo real
+    debugPrint('📦 [OrderStatusPusher] Status atualizado via Pusher: ${status.label}');
+    debugPrint('📦 [OrderStatusPusher] Notificação será enviada pelo backend via FCM');
+    
+    // NotificationService.showOrderStatusNotification(...) - REMOVIDO
   }
 
   /// Desconectar e limpar recursos

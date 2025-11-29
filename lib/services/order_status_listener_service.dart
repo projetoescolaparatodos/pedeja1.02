@@ -98,53 +98,14 @@ class OrderStatusListenerService {
     models.OrderStatus oldStatus,
     models.OrderStatus newStatus,
   ) {
-    // Pegar primeiros 8 caracteres do orderId para exibir
-    final shortOrderId = order.id.length > 8 ? order.id.substring(0, 8) : order.id;
+    // ✅ REMOVIDO: Não dispara notificação local aqui para evitar duplicatas
+    // O backend envia via FCM quando detecta mudança no Firestore
+    // Este listener serve APENAS para atualizar a UI em tempo real
     
-    String title;
-    String body;
+    debugPrint('📦 [OrderStatusListener] Status mudou: ${oldStatus.label} → ${newStatus.label}');
+    debugPrint('📦 [OrderStatusListener] Notificação será enviada pelo backend via FCM');
     
-    // Personalizar mensagem baseada no novo status
-    switch (newStatus) {
-      case models.OrderStatus.preparing:
-        title = '👨‍🍳 Pedido em Preparação';
-        body = 'Seu pedido #$shortOrderId está sendo preparado! Em breve estará pronto.';
-        break;
-        
-      case models.OrderStatus.ready:
-        title = '✅ Pedido Pronto!';
-        body = 'Seu pedido #$shortOrderId está pronto para ser retirado ou entregue!';
-        break;
-        
-      case models.OrderStatus.outForDelivery: // ✨ Notificação para "Saiu para Entrega"
-        title = '🚗 Pedido Saiu para Entrega!';
-        body = 'Seu pedido #$shortOrderId está a caminho! Aguarde na localização de entrega.';
-        break;
-        
-      case models.OrderStatus.delivered:
-        title = '🎉 Pedido Entregue!';
-        body = 'Seu pedido #$shortOrderId foi entregue. Bom apetite!';
-        break;
-        
-      case models.OrderStatus.cancelled:
-        title = '❌ Pedido Cancelado';
-        body = 'Seu pedido #$shortOrderId foi cancelado.';
-        break;
-        
-      default:
-        title = '📦 Status do Pedido Atualizado';
-        body = 'Pedido #$shortOrderId: ${newStatus.label}';
-    }
-    
-    // ⚠️ IMPORTANTE: Notificações locais só funcionam com APP ABERTO
-    // Para notificações com app FECHADO, o backend precisa enviar via FCM
-    // quando detectar mudança de status no Firebase
-    NotificationService.showOrderStatusNotification(
-      orderId: order.id,
-      title: title,
-      body: body,
-      status: newStatus,
-    );
+    // Nota: Se precisar atualizar UI, adicione callback aqui
   }
 
   /// Iniciar monitoramento de um pedido específico

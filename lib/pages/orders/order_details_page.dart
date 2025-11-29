@@ -37,6 +37,10 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> with WidgetsBinding
     super.initState();
     _currentOrder = widget.order;
     WidgetsBinding.instance.addObserver(this);
+    
+    // ✅ Marcar este chat como ativo para suprimir notificações
+    ChatService.setActiveChatOrder(widget.order.id);
+    
     _loadCachedMessages();
     _initializeChat();
     _listenToOrderChanges(); // ✅ Escutar mudanças no pedido
@@ -248,6 +252,9 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> with WidgetsBinding
     _scrollController.dispose();
     // ✅ Cancelar listener do Firestore
     _orderSubscription?.cancel();
+    
+    // ✅ Desmarcar chat ativo para permitir notificações novamente
+    ChatService.setActiveChatOrder(null);
     
     // ✅ NÃO desconectar o chat ao sair da página
     // O chat só deve desconectar quando:

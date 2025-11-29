@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
 import '../state/auth_state.dart';
 import '../pages/onboarding/onboarding_page.dart';
@@ -7,7 +6,8 @@ import '../pages/home/home_page.dart';
 
 /// 🔐 Widget que gerencia a navegação baseada no estado de autenticação
 /// 
-/// Verifica autenticação do Firebase e redireciona:
+/// Verifica estado do AuthState e redireciona:
+/// - Se loading → Splash/Loading
 /// - Se usuário logado → HomePage
 /// - Se não logado → OnboardingPage
 class AuthWrapper extends StatelessWidget {
@@ -15,11 +15,14 @@ class AuthWrapper extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<User?>(
-      stream: FirebaseAuth.instance.authStateChanges(),
-      builder: (context, snapshot) {
-        // 🔄 Carregando
-        if (snapshot.connectionState == ConnectionState.waiting) {
+    debugPrint('🔐 [AuthWrapper] build() chamado');
+    
+    return Consumer<AuthState>(
+      builder: (context, authState, child) {
+        debugPrint('🔀 [AuthWrapper] Consumer update: isLoading=${authState.isLoading}, isAuthenticated=${authState.isAuthenticated}');
+        
+        // 1️⃣ Carregando (fazendo auto-login)
+        if (authState.isLoading) {
           return const Scaffold(
             backgroundColor: Color(0xFF022E28),
             body: Center(
@@ -42,26 +45,15 @@ class AuthWrapper extends StatelessWidget {
             ),
           );
         }
-
-        // ✅ Verificar se usuário está logado
-        final user = snapshot.data;
         
-        if (user != null) {
-          debugPrint('🔐 [AuthWrapper] Usuário logado: ${user.email}');
-          
-          // Carregar dados do usuário se necessário
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            final authState = Provider.of<AuthState>(context, listen: false);
-            if (authState.userData == null) {
-              debugPrint('🔄 [AuthWrapper] Carregando dados do usuário...');
-            }
-          });
-          
+        // 2️⃣ Está logado
+        if (authState.isAuthenticated) {
+          debugPrint('✅ [AuthWrapper] Usuário autenticado, indo para HomePage');
           return const HomePage();
         }
-
-        // ❌ Usuário não logado → Onboarding/Login
-        debugPrint('🔐 [AuthWrapper] Usuário não autenticado');
+        
+        // 3️⃣ Não está logado
+        debugPrint('❌ [AuthWrapper] Usuário não autenticado, indo para OnboardingPage');
         return const OnboardingPage();
       },
     );

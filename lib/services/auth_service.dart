@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// 🔐 Serviço de Autenticação integrado com Firebase + API Backend
 class AuthService {
@@ -19,6 +20,65 @@ class AuthService {
   Map<String, dynamic>? get restaurantData => _restaurantData;
   bool get isAuthenticated => currentUser != null;
   bool get isPartner => _restaurantData != null;
+
+  // Singleton
+  static final AuthService _instance = AuthService._internal();
+  factory AuthService() => _instance;
+  AuthService._internal();
+  static AuthService get instance => _instance;
+
+  /// 💾 Salvar credenciais localmente
+  Future<void> saveCredentials(String email, String token) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('isLoggedIn', true);
+      await prefs.setString('userEmail', email);
+      await prefs.setString('jwtToken', token);
+      debugPrint('💾 [AuthService] Credenciais salvas para: $email');
+    } catch (e) {
+      debugPrint('❌ [AuthService] Erro ao salvar credenciais: $e');
+    }
+  }
+
+  /// 🔄 Carregar credenciais salvas
+  Future<bool> loadSavedCredentials() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final isLoggedIn = prefs.getBool('isLoggedIn') ?? false;
+      final email = prefs.getString('userEmail');
+      final token = prefs.getString('jwtToken');
+
+      if (isLoggedIn && email != null && token != null) {
+        debugPrint('🔄 [AuthService] Credenciais encontradas para: $email');
+        _jwtToken = token;
+        
+        // Tentar restaurar sessão do Firebase se necessário
+        // Nota: Firebase Auth deve persistir automaticamente, mas se falhar,
+        // podemos confiar no nosso token JWT para chamadas de API
+        
+        return true;
+      }
+      
+      debugPrint('🔄 [AuthService] Nenhuma credencial salva encontrada');
+      return false;
+    } catch (e) {
+      debugPrint('❌ [AuthService] Erro ao carregar credenciais: $e');
+      return false;
+    }
+  }
+
+  /// 🗑️ Limpar credenciais
+  Future<void> clearCredentials() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('isLoggedIn');
+      await prefs.remove('userEmail');
+      await prefs.remove('jwtToken');
+      debugPrint('🗑️ [AuthService] Credenciais limpas');
+    } catch (e) {
+      debugPrint('❌ [AuthService] Erro ao limpar credenciais: $e');
+    }
+  }
 
   /// 🚀 1. Login com Email e Senha
   Future<Map<String, dynamic>> signInWithEmailAndPassword({
@@ -43,6 +103,11 @@ class AuthService {
       final isComplete = await checkRegistrationComplete();
 
       debugPrint('📋 [AuthService] Cadastro completo: $isComplete');
+
+      // ✅ Salvar credenciais manualmente
+      if (_jwtToken != null) {
+        await saveCredentials(email, _jwtToken!);
+      }
 
       return {
         'success': true,
@@ -112,6 +177,11 @@ class AuthService {
 
       // 4️⃣ Verificar status do cadastro
       final isComplete = await checkRegistrationComplete();
+
+      // ✅ Salvar credenciais manualmente
+      if (_jwtToken != null) {
+        await saveCredentials(email, _jwtToken!);
+      }
 
       return {
         'success': true,
@@ -378,6 +448,7 @@ class AuthService {
   Future<void> signOut() async {
     try {
       await _auth.signOut();
+      await clearCredentials(); // ✅ Limpar credenciais manuais
       _jwtToken = null;
       _userData = null;
       debugPrint('👋 [AuthService] Logout realizado');

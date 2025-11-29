@@ -13,6 +13,7 @@ class NotificationService {
 
   static String? _fcmToken;
   static String? _authToken;
+  static String? _userId; // ✅ ID do usuário (backend)
   static Function(String)? _onNotificationClick;
 
   /// Getter para o token FCM
@@ -165,16 +166,9 @@ class NotificationService {
     try {
       debugPrint('📤 [NotificationService] Enviando token para backend...');
 
-      // ✅ Obter userId do Firebase Auth
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) {
-        debugPrint('⚠️ [NotificationService] Usuário não autenticado');
-        return;
-      }
-
-      // ✅ Usar endpoint correto: PUT /api/users/:userId
-      final response = await http.put(
-        Uri.parse('https://api-pedeja.vercel.app/api/users/${user.uid}'),
+      // ✅ Endpoint correto: POST /api/users/fcm-token (userId vem do JWT)
+      final response = await http.post(
+        Uri.parse('https://api-pedeja.vercel.app/api/users/fcm-token'),
         headers: {
           'Authorization': 'Bearer $_authToken',
           'Content-Type': 'application/json',
@@ -182,10 +176,15 @@ class NotificationService {
         body: json.encode({'fcmToken': token}),
       );
 
+      debugPrint('📡 [NotificationService] Response status: ${response.statusCode}');
+      debugPrint('📡 [NotificationService] Response body: ${response.body}');
+
       if (response.statusCode == 200) {
-        debugPrint('✅ [NotificationService] Token FCM registrado no backend');
-        debugPrint('   User ID: ${user.uid}');
-        debugPrint('   Token: ${token.substring(0, 20)}...');
+        final result = json.decode(response.body);
+        if (result['success'] == true) {
+          debugPrint('✅ [NotificationService] Token FCM registrado no backend!');
+          debugPrint('   Token: ${token.substring(0, 20)}...');
+        }
       } else {
         debugPrint('❌ [NotificationService] Erro ao registrar token:');
         debugPrint('   Status: ${response.statusCode}');
@@ -196,9 +195,12 @@ class NotificationService {
     }
   }
 
-  /// Atualizar auth token (chamar após login)
-  static Future<void> updateAuthToken(String authToken) async {
+  /// Atualizar auth token e user ID (chamar após login)
+  static Future<void> updateAuthToken(String authToken, {String? userId}) async {
     _authToken = authToken;
+    if (userId != null) {
+      _userId = userId;
+    }
     
     // Se já temos FCM token, enviar para backend
     if (_fcmToken != null) {
@@ -415,4 +417,44 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   debugPrint('🔥 [Background] Notificação recebida');
   debugPrint('   Título: ${message.notification?.title}');
   debugPrint('   Corpo: ${message.notification?.body}');
+  debugPrint('   Data: ${message.data}');
+
+  // Se a notificação não tiver payload de exibição (notification),
+  // mas tiver dados (data), forçamos a exibição local.
+  if (message.notification == null && message.data.isNotEmpty) {
+    debugPrint('🔥 [Background] Mensagem de dados pura detectada - exibindo notificação local');
+    
+    // Inicializar plugin localmente neste isolado
+    final FlutterLocalNotificationsPlugin localNotifications = FlutterLocalNotificationsPlugin();
+    
+    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const iosSettings = DarwinInitializationSettings();
+    const initSettings = InitializationSettings(android: androidSettings, iOS: iosSettings);
+    
+    await localNotifications.initialize(initSettings);
+
+    // Tentar extrair título e corpo dos dados
+    final title = message.data['title'] ?? 'Nova Atualização';
+    final body = message.data['body'] ?? message.data['message'] ?? 'Você tem uma nova atualização';
+    final orderId = message.data['orderId'];
+
+    const androidDetails = AndroidNotificationDetails(
+      'order_updates',
+      'Atualizações de Pedidos',
+      channelDescription: 'Notificações sobre o status dos seus pedidos',
+      importance: Importance.high,
+      priority: Priority.high,
+      icon: '@mipmap/ic_launcher',
+    );
+
+    const details = NotificationDetails(android: androidDetails);
+
+    await localNotifications.show(
+      DateTime.now().millisecond,
+      title,
+      body,
+      details,
+      payload: orderId,
+    );
+  }
 }

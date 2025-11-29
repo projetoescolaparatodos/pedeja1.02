@@ -52,6 +52,10 @@ dependencies:
   # Vídeo
   video_player: ^2.8.2
   flutter_cache_manager: ^3.3.1  # ✅ Cache de vídeos promocionais
+  
+  # Localização e GPS
+  geolocator: ^13.0.2
+  geocoding: ^3.0.0
 
 dev_dependencies:
   flutter_test:

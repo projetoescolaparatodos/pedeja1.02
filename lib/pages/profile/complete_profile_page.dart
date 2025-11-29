@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../state/user_state.dart';
 import '../../state/auth_state.dart';
+import '../../services/location_service.dart';
 import '../home/home_page.dart';
 
 class CompleteProfilePage extends StatefulWidget {
@@ -27,6 +28,7 @@ class _CompleteProfilePageState extends State<CompleteProfilePage> {
   final _stateController = TextEditingController();
 
   bool _loading = false;
+  bool _loadingGPS = false;
 
   @override
   void initState() {
@@ -166,6 +168,54 @@ class _CompleteProfilePageState extends State<CompleteProfilePage> {
     }
   }
 
+  Future<void> _useGPSLocation() async {
+    setState(() => _loadingGPS = true);
+
+    try {
+      debugPrint('📍 [CompleteProfilePage] Obtendo localização GPS...');
+
+      final address = await LocationService.getCurrentAddress();
+
+      if (address == null) {
+        throw Exception('Não foi possível obter o endereço');
+      }
+
+      setState(() {
+        _streetController.text = address['street'] ?? '';
+        _numberController.text = address['number'] ?? '';
+        _neighborhoodController.text = address['neighborhood'] ?? '';
+        _cityController.text = address['city'] ?? '';
+        _stateController.text = address['state'] ?? '';
+        _zipCodeController.text = address['zipCode'] ?? '';
+      });
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('✅ Endereço preenchido com sua localização!'),
+          backgroundColor: Color(0xFF4CAF50),
+        ),
+      );
+
+      debugPrint('✅ [CompleteProfilePage] Endereço GPS preenchido');
+    } catch (e) {
+      debugPrint('❌ [CompleteProfilePage] Erro ao obter GPS: $e');
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('❌ ${e.toString().replaceAll('Exception: ', '')}'),
+          backgroundColor: const Color(0xFF74241F),
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    } finally {
+      setState(() => _loadingGPS = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     debugPrint('🎨 [CompleteProfilePage] build() chamado');
@@ -279,13 +329,41 @@ class _CompleteProfilePageState extends State<CompleteProfilePage> {
               const SizedBox(height: 32),
 
               // 🏠 ENDEREÇO
-              const Text(
-                'Endereço de Entrega',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFFE39110),
-                ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Endereço de Entrega',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFFE39110),
+                    ),
+                  ),
+                  // Botão GPS
+                  ElevatedButton.icon(
+                    onPressed: _loadingGPS ? null : _useGPSLocation,
+                    icon: _loadingGPS
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                            ),
+                          )
+                        : const Icon(Icons.my_location, size: 18),
+                    label: Text(_loadingGPS ? 'Obtendo...' : 'GPS'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF4CAF50),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 16),
 

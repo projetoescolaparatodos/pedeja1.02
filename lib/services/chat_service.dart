@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:pusher_channels_flutter/pusher_channels_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:http/http.dart' as http;
 import 'backend_order_service.dart';
 import 'notification_service.dart';
 import 'order_status_pusher_service.dart'; // ✅ Import adicionado
@@ -48,6 +49,7 @@ class ChatMessage {
 class ChatService {
   static final PusherChannelsFlutter _pusher = PusherChannelsFlutter.getInstance();
   static bool _initialized = false;
+  static String? _currentAuthToken; // ✅ Token de autenticação compartilhado
   
   // Callbacks por orderId
   static final Map<String, Function(ChatMessage)> _messageCallbacks = {};
@@ -85,10 +87,17 @@ class ChatService {
     required String userId,
     required Function(ChatMessage) onMessageReceived,
     String? restaurantName, // ✅ Adicionar nome do restaurante
+    String? authToken, // ✅ CRÍTICO: Token de autenticação
     Function(String)? onError,
   }) async {
     try {
       debugPrint('💬 [ChatService] Inicializando para pedido $orderId...');
+      
+      // ✅ Salvar token de autenticação
+      if (authToken != null) {
+        _currentAuthToken = authToken;
+        debugPrint('💬 [ChatService] Token de autenticação salvo');
+      }
       
       // Salvar callbacks
       _messageCallbacks[orderId] = onMessageReceived;
@@ -143,6 +152,27 @@ class ChatService {
                 debugPrint('⚠️ [ChatService] Pusher em loop de reconexão, aguardando...');
               }
             },
+            onAuthorizer: (String channelName, String socketId, dynamic options) async {
+              // ✅ CRÍTICO: Autorizar canais privados com backend
+              debugPrint('🔐 [ChatService] Autorizando canal: $channelName');
+              
+              if (_currentAuthToken != null) {
+                try {
+                  final response = await _authorizeChannel(
+                    channelName: channelName,
+                    socketId: socketId,
+                    authToken: _currentAuthToken!,
+                  );
+                  return response;
+                } catch (e) {
+                  debugPrint('❌ [ChatService] Erro na autorização: $e');
+                  return null;
+                }
+              }
+              
+              debugPrint('⚠️ [ChatService] Sem token de autenticação');
+              return null;
+            },
           );
 
           _initialized = true;
@@ -160,6 +190,41 @@ class ChatService {
     } catch (e) {
       debugPrint('❌ [ChatService] Erro ao inicializar: $e');
       onError?.call('Erro ao conectar ao chat: $e');
+    }
+  }
+
+  /// Autorizar canal privado no backend
+  static Future<Map<String, dynamic>?> _authorizeChannel({
+    required String channelName,
+    required String socketId,
+    required String authToken,
+  }) async {
+    try {
+      debugPrint('🔐 [ChatService] Autorizando $channelName (socketId: $socketId)');
+      
+      final response = await http.post(
+        Uri.parse('https://api-pedeja.vercel.app/pusher/auth'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $authToken',
+        },
+        body: json.encode({
+          'socket_id': socketId,
+          'channel_name': channelName,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        debugPrint('✅ [ChatService] Canal autorizado: $channelName');
+        return data;
+      } else {
+        debugPrint('❌ [ChatService] Erro na autorização: ${response.statusCode} - ${response.body}');
+        return null;
+      }
+    } catch (e) {
+      debugPrint('❌ [ChatService] Erro ao autorizar canal: $e');
+      return null;
     }
   }
 
@@ -219,9 +284,9 @@ class ChatService {
               debugPrint('⚠️ [ChatService] Erro ao salvar mensagem no storage (continuando): $e');
             });
             
-            // ✅ Disparar notificação se NÃO for mensagem própria, for do restaurante
-            // E se o usuário NÃO estiver vendo o chat deste pedido
-            if (!message.isMe && message.isRestaurant && _activeOrderId != orderId) {
+            // ✅ SEMPRE disparar notificação se NÃO for mensagem própria e for do restaurante
+            // (Removida supressão quando chat está aberto)
+            if (!message.isMe && message.isRestaurant) {
               debugPrint('🔔 [ChatService] Disparando notificação de nova mensagem');
               final restaurantName = _restaurantNames[orderId] ?? 'Restaurante';
               NotificationService.showChatNotification(
@@ -229,8 +294,6 @@ class ChatService {
                 senderName: restaurantName,
                 messageText: message.message,
               );
-            } else if (_activeOrderId == orderId) {
-              debugPrint('💬 [ChatService] Chat ativo - notificação suprimida');
             }
             
             // Notificar callback se existir (proteger contra chamadas após dispose)

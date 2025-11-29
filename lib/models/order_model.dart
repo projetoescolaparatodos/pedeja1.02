@@ -236,7 +236,7 @@ class Order {
 /// Status do pedido
 enum OrderStatus {
   pending('pending', 'Pendente'),                        // Aguardando pagamento
-  accepted('accepted', 'Pedido confirmado'),             // Pronto pra produzir ✅
+  accepted('accepted', 'Pronto!'),                       // Aceito pelo entregador = Pronto ✅
   preparing('preparing', 'Preparando seu pedido'),       // Em preparação 👨‍🍳
   ready('ready', 'Pronto!'),                             // Pronto para retirada/entrega 📦
   awaitingBatch('awaiting_batch', 'Aguardando entregador'), // Aguardando lote ✋
@@ -303,7 +303,7 @@ enum OrderStatus {
       case OrderStatus.pending:
         return 0xFFFFA726; // Laranja - aguardando
       case OrderStatus.accepted:
-        return 0xFF66BB6A; // Verde claro - confirmado
+        return 0xFF26A69A; // Teal - pronto (aceito pelo entregador)
       case OrderStatus.preparing:
         return 0xFF42A5F5; // Azul - preparando
       case OrderStatus.ready:
@@ -327,7 +327,7 @@ enum OrderStatus {
       case OrderStatus.pending:
         return '⏳'; // Aguardando pagamento
       case OrderStatus.accepted:
-        return '✅'; // Confirmado
+        return '📦'; // Pronto (aceito pelo entregador)
       case OrderStatus.preparing:
         return '👨‍🍳'; // Preparando
       case OrderStatus.ready:

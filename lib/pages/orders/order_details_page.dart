@@ -140,9 +140,21 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> with WidgetsBinding
 
     final authState = Provider.of<AuthState>(context, listen: false);
     
-    if (authState.currentUser == null) {
+    // ✅ FIX: Verificar se temos JWT token OU Firebase user
+    if (authState.currentUser == null && authState.jwtToken == null) {
       setState(() {
         _error = 'Usuário não autenticado';
+        _isConnecting = false;
+      });
+      return;
+    }
+    
+    // ✅ Obter userId do Firebase ou dos dados do usuário
+    String? userId = authState.currentUser?.uid ?? authState.userData?['uid'] ?? authState.userData?['id'];
+    
+    if (userId == null) {
+      setState(() {
+        _error = 'ID do usuário não encontrado';
         _isConnecting = false;
       });
       return;
@@ -151,8 +163,9 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> with WidgetsBinding
     try {
       await ChatService.initialize(
         orderId: widget.order.id,
-        userId: authState.currentUser!.uid,
+        userId: userId, // ✅ Usar userId obtido de forma segura
         restaurantName: widget.order.restaurantName, // ✅ Passar nome do restaurante
+        authToken: authState.jwtToken, // ✅ CRÍTICO: Passar token JWT para autenticação
         onMessageReceived: (message) {
           // ✅ Evitar duplicatas: verificar se já existe mensagem similar recente
           final isDuplicate = _messages.any((m) => 

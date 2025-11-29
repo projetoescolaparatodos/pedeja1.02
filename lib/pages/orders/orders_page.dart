@@ -456,7 +456,7 @@ class _OrdersPageState extends State<OrdersPage> with SingleTickerProviderStateM
         backgroundColor = const Color(0xFFFFA726); // Laranja
         break;
       case OrderStatus.accepted:
-        backgroundColor = const Color(0xFF66BB6A); // Verde claro
+        backgroundColor = const Color(0xFF26A69A); // Teal - Pronto!
         break;
       case OrderStatus.preparing:
         backgroundColor = const Color(0xFF42A5F5); // Azul

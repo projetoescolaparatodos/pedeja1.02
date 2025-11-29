@@ -2,6 +2,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart'; // ✅ Para Color
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 
@@ -114,6 +115,7 @@ class NotificationService {
       importance: Importance.high,
       enableVibration: true,
       playSound: true,
+      ledColor: Color(0xFFFFC107), // ✅ LED amarelo
     );
 
     const chatChannel = AndroidNotificationChannel(
@@ -123,6 +125,7 @@ class NotificationService {
       importance: Importance.high,
       enableVibration: true,
       playSound: true,
+      ledColor: Color(0xFFFFC107), // ✅ LED amarelo
     );
 
     final androidImpl = _localNotifications
@@ -230,7 +233,12 @@ class NotificationService {
       channelDescription: 'Notificações sobre o status dos seus pedidos',
       importance: Importance.high,
       priority: Priority.high,
-      icon: '@mipmap/ic_launcher',
+      icon: 'ic_notification', // ✅ Ícone pequeno branco
+      largeIcon: DrawableResourceAndroidBitmap('@mipmap/ic_launcher'), // ✅ Logo grande colorida
+      color: Color(0xFFFFC107), // ✅ Amarelo PedeJá (#FFC107)
+      colorized: true, // ✅ Aplicar cor de fundo amarela
+      showWhen: true, // ✅ Mostrar timestamp
+      visibility: NotificationVisibility.public, // ✅ Visibilidade pública
       enableVibration: true,
       playSound: true,
     );
@@ -278,7 +286,10 @@ class NotificationService {
         channelDescription: 'Notificações de novas mensagens no chat',
         importance: Importance.high,
         priority: Priority.high,
-        icon: '@mipmap/ic_launcher',
+        icon: 'ic_notification', // ✅ Ícone pequeno branco
+        largeIcon: const DrawableResourceAndroidBitmap('@mipmap/ic_launcher'), // ✅ Logo grande colorida
+        color: const Color(0xFFFFC107), // ✅ Amarelo PedeJá (#FFC107)
+        colorized: true, // ✅ Aplicar cor de fundo amarela
         enableVibration: true,
         playSound: true,
         styleInformation: MessagingStyleInformation(
@@ -332,7 +343,12 @@ class NotificationService {
         channelDescription: 'Notificações sobre o status dos seus pedidos',
         importance: Importance.high,
         priority: Priority.high,
-        icon: '@mipmap/ic_launcher',
+        icon: 'ic_notification', // ✅ Ícone pequeno branco
+        largeIcon: DrawableResourceAndroidBitmap('@mipmap/ic_launcher'), // ✅ Logo grande colorida
+        color: Color(0xFFFFC107), // ✅ Amarelo PedeJá (#FFC107)
+        colorized: true, // ✅ Aplicar cor de fundo amarela
+        showWhen: true, // ✅ Mostrar timestamp
+        visibility: NotificationVisibility.public, // ✅ Visibilidade pública
         enableVibration: true,
         playSound: true,
       );
@@ -444,7 +460,12 @@ Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
       channelDescription: 'Notificações sobre o status dos seus pedidos',
       importance: Importance.high,
       priority: Priority.high,
-      icon: '@mipmap/ic_launcher',
+      icon: 'ic_notification', // ✅ Ícone pequeno branco
+      largeIcon: DrawableResourceAndroidBitmap('@mipmap/ic_launcher'), // ✅ Logo grande colorida
+      color: Color(0xFFFFC107), // ✅ Amarelo PedeJá (#FFC107)
+      colorized: true, // ✅ Aplicar cor de fundo amarela
+      showWhen: true, // ✅ Mostrar timestamp
+      visibility: NotificationVisibility.public, // ✅ Visibilidade pública
     );
 
     const details = NotificationDetails(android: androidDetails);

@@ -44,6 +44,11 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 
+# ✅ Chave de assinatura (NUNCA commitar!)
+/android/key.properties
+*.jks
+*.keystore
+
 # APK extraction (temporary analysis)
 apk-extracted/
 app-release.zip

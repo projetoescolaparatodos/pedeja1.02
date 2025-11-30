@@ -319,6 +319,8 @@ class CartPage extends StatelessWidget {
   }
 
   Widget _buildCartSummary(BuildContext context, CartState cart) {
+    final bool belowMinimum = cart.total < 10.0;
+
     return Column(
       children: [
         const SizedBox(height: 16),
@@ -360,15 +362,45 @@ class CartPage extends StatelessWidget {
               ),
               const SizedBox(height: 16),
 
+              // ⚠️ AVISO DE VALOR MÍNIMO
+              if (belowMinimum)
+                Container(
+                  margin: const EdgeInsets.only(bottom: 16),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.orange, width: 1),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.info_outline, color: Colors.orange, size: 20),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Valor mínimo do pedido: R\$ 10,00',
+                          style: TextStyle(
+                            color: Colors.orange,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
               // 🚀 BOTÃO FINALIZAR PEDIDO
               SizedBox(
                 width: double.infinity,
                 height: 54,
                 child: ElevatedButton(
-                  onPressed: () => _processCheckout(context),
+                  onPressed: belowMinimum ? null : () => _processCheckout(context),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF74241F), // Vinho
                     foregroundColor: Colors.white,
+                    disabledBackgroundColor: Colors.grey.shade400,
+                    disabledForegroundColor: Colors.grey.shade600,
                     elevation: 4,
                     shadowColor: Colors.black.withValues(alpha: 0.5),
                     shape: RoundedRectangleBorder(

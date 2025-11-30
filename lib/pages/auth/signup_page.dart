@@ -42,11 +42,11 @@ class _SignupPageState extends State<SignupPage> {
     if (today.month < birth.month || (today.month == birth.month && today.day < birth.day)) {
       age -= 1;
     }
-    return age >= 18;
+    return age >= 16;
   }
 
   Future<void> _pickBirthDate() async {
-    final initial = DateTime.now().subtract(const Duration(days: 365 * 18));
+    final initial = DateTime.now().subtract(const Duration(days: 365 * 16));
     final first = DateTime(1900);
     final last = DateTime.now();
 
@@ -85,7 +85,7 @@ class _SignupPageState extends State<SignupPage> {
     if (!_isAdult) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Você precisa ter 18 anos ou mais para criar uma conta'),
+          content: Text('Você precisa ter 16 anos ou mais para criar uma conta'),
           backgroundColor: Color(0xFF74241F),
         ),
       );
@@ -252,7 +252,7 @@ class _SignupPageState extends State<SignupPage> {
                       return 'Selecione sua data de nascimento';
                     }
                     if (!_isAdult) {
-                      return 'Você precisa ter 18 anos ou mais';
+                      return 'Você precisa ter 16 anos ou mais';
                     }
                     return null;
                   },
@@ -262,7 +262,7 @@ class _SignupPageState extends State<SignupPage> {
                   const Padding(
                     padding: EdgeInsets.only(top: 8.0),
                     child: Text(
-                      'Você precisa ter 18 anos ou mais para criar uma conta.',
+                      'Você precisa ter 16 anos ou mais para criar uma conta.',
                       style: TextStyle(color: Colors.redAccent, fontSize: 13),
                     ),
                   ),

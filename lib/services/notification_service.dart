@@ -292,11 +292,6 @@ class NotificationService {
         colorized: true, // ✅ Aplicar cor de fundo amarela
         enableVibration: true,
         playSound: true,
-        styleInformation: MessagingStyleInformation(
-          Person(name: 'Você'),
-          conversationTitle: 'Chat do Pedido #$shortOrderId',
-          messages: [],
-        ),
       );
 
       const iosDetails = DarwinNotificationDetails(
@@ -312,8 +307,8 @@ class NotificationService {
 
       await _localNotifications.show(
         orderId.hashCode, // ID único baseado no orderId
-        '💬 Nova mensagem no chat do pedido #$shortOrderId',
-        '$senderName: $messageText',
+        '$senderName',
+        messageText,
         details,
         payload: orderId,
       );

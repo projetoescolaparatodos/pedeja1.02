@@ -40,6 +40,16 @@ class _OrdersPageState extends State<OrdersPage> with SingleTickerProviderStateM
 
     try {
       final authState = Provider.of<AuthState>(context, listen: false);
+      
+      // ✅ NOVO: Bloquear convidados
+      if (authState.isGuest) {
+        setState(() {
+          _error = 'Faça login para ver seus pedidos';
+          _isLoading = false;
+        });
+        return;
+      }
+      
       // ✅ Tentar obter ID do usuário do Firebase ou dos dados carregados da API
       final userId = authState.currentUser?.uid ?? 
                      authState.userData?['id'] ?? 

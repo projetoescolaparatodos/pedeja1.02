@@ -653,12 +653,15 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                     children: [
                       const Icon(Icons.shopping_cart, size: 22),
                       const SizedBox(width: 10),
-                      Text(
-                        'Adicionar • R\$ ${_totalPrice.toStringAsFixed(2).replaceAll('.', ',')}',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 0.5,
+                      Flexible(
+                        child: Text(
+                          'Adicionar • R\$ ${_totalPrice.toStringAsFixed(2).replaceAll('.', ',')}',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 0.5,
+                          ),
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
                     ],

@@ -16,6 +16,37 @@ class CompleteProfilePage extends StatefulWidget {
 class _CompleteProfilePageState extends State<CompleteProfilePage> {
   final _formKey = GlobalKey<FormState>();
 
+  // Mapa de estados brasileiros (nome completo → sigla)
+  static const Map<String, String> _estadosBrasileiros = {
+    'acre': 'AC',
+    'alagoas': 'AL',
+    'amapá': 'AP',
+    'amazonas': 'AM',
+    'bahia': 'BA',
+    'ceará': 'CE',
+    'distrito federal': 'DF',
+    'espírito santo': 'ES',
+    'goiás': 'GO',
+    'maranhão': 'MA',
+    'mato grosso': 'MT',
+    'mato grosso do sul': 'MS',
+    'minas gerais': 'MG',
+    'pará': 'PA',
+    'paraíba': 'PB',
+    'paraná': 'PR',
+    'pernambuco': 'PE',
+    'piauí': 'PI',
+    'rio de janeiro': 'RJ',
+    'rio grande do norte': 'RN',
+    'rio grande do sul': 'RS',
+    'rondônia': 'RO',
+    'roraima': 'RR',
+    'santa catarina': 'SC',
+    'são paulo': 'SP',
+    'sergipe': 'SE',
+    'tocantins': 'TO',
+  };
+
   // Controllers
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
@@ -29,6 +60,19 @@ class _CompleteProfilePageState extends State<CompleteProfilePage> {
 
   bool _loading = false;
   bool _loadingGPS = false;
+
+  /// Converte nome de estado para sigla (ex: "Pará" → "PA")
+  String _normalizarEstado(String estado) {
+    final estadoLower = estado.trim().toLowerCase();
+    
+    // Se já é uma sigla válida (2 letras), retorna uppercase
+    if (estado.length == 2) {
+      return estado.toUpperCase();
+    }
+    
+    // Procura no mapa de estados
+    return _estadosBrasileiros[estadoLower] ?? estado.toUpperCase();
+  }
 
   @override
   void initState() {
@@ -68,7 +112,7 @@ class _CompleteProfilePageState extends State<CompleteProfilePage> {
           _complementController.text = address['complement'] ?? '';
           _neighborhoodController.text = address['neighborhood'] ?? '';
           _cityController.text = address['city'] ?? '';
-          _stateController.text = address['state'] ?? '';
+          _stateController.text = _normalizarEstado(address['state'] ?? '');
         }
       });
       
@@ -185,7 +229,7 @@ class _CompleteProfilePageState extends State<CompleteProfilePage> {
         _numberController.text = address['number'] ?? '';
         _neighborhoodController.text = address['neighborhood'] ?? '';
         _cityController.text = address['city'] ?? '';
-        _stateController.text = address['state'] ?? '';
+        _stateController.text = _normalizarEstado(address['state'] ?? '');
         _zipCodeController.text = address['zipCode'] ?? '';
       });
 
@@ -478,18 +522,30 @@ class _CompleteProfilePageState extends State<CompleteProfilePage> {
                       label: 'UF *',
                       icon: Icons.map,
                       textCapitalization: TextCapitalization.characters,
-                      maxLength: 2,
                       inputFormatters: [
-                        FilteringTextInputFormatter.allow(RegExp(r'[A-Za-z]')),
+                        FilteringTextInputFormatter.allow(RegExp(r'[A-Za-zÀ-ÿ ]')),
                       ],
                       validator: (value) {
                         if (value == null || value.trim().isEmpty) {
                           return 'UF obrigatória';
                         }
-                        if (value.length != 2) {
+                        final normalizado = _normalizarEstado(value);
+                        if (normalizado.length != 2) {
                           return 'UF inválida';
                         }
                         return null;
+                      },
+                      onChanged: (value) {
+                        // Auto-converter para sigla quando usuário terminar de digitar
+                        if (value.length >= 3) {
+                          final normalizado = _normalizarEstado(value);
+                          if (normalizado.length == 2 && normalizado != value) {
+                            _stateController.text = normalizado;
+                            _stateController.selection = TextSelection.fromPosition(
+                              TextPosition(offset: normalizado.length),
+                            );
+                          }
+                        }
                       },
                     ),
                   ),
@@ -546,6 +602,7 @@ class _CompleteProfilePageState extends State<CompleteProfilePage> {
     List<TextInputFormatter>? inputFormatters,
     TextCapitalization textCapitalization = TextCapitalization.none,
     int? maxLength,
+    void Function(String)? onChanged,
   }) {
     return TextFormField(
       controller: controller,
@@ -579,6 +636,7 @@ class _CompleteProfilePageState extends State<CompleteProfilePage> {
       inputFormatters: inputFormatters,
       textCapitalization: textCapitalization,
       maxLength: maxLength,
+      onChanged: onChanged,
     );
   }
 

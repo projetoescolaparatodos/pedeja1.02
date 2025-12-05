@@ -46,9 +46,9 @@ class AuthWrapper extends StatelessWidget {
           );
         }
         
-        // 2️⃣ Está logado
-        if (authState.isAuthenticated) {
-          debugPrint('✅ [AuthWrapper] Usuário autenticado, indo para HomePage');
+        // 2️⃣ Está logado OU é convidado
+        if (authState.isAuthenticated || authState.isGuest) {
+          debugPrint('✅ [AuthWrapper] Usuário autenticado ou convidado, indo para HomePage');
           return const HomePage();
         }
         

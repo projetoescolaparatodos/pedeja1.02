@@ -318,6 +318,36 @@ class _LoginPageState extends State<LoginPage> {
 
                 const SizedBox(height: 24),
 
+                // ✅ Botão Entrar como Convidado
+                TextButton(
+                  onPressed: () {
+                    context.read<AuthState>().enterGuestMode();
+                    Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(builder: (_) => const HomePage()),
+                    );
+                  },
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xFFE39110),
+                  ),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.person_outline, size: 20),
+                      SizedBox(width: 8),
+                      Text(
+                        'Entrar como convidado',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+
                 // Sign up link
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,

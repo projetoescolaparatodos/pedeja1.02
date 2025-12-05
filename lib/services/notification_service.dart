@@ -227,6 +227,55 @@ class NotificationService {
 
   /// Exibir notificação local
   static Future<void> _showLocalNotification(RemoteMessage message) async {
+    // ✅ Detectar tipo de notificação
+    final type = message.data['type'];
+    final orderId = message.data['orderId'];
+    
+    // 💬 Notificação de CHAT
+    if (type == 'chat_message') {
+      debugPrint('💬 [NotificationService] Notificação de chat detectada');
+      
+      final senderName = message.data['senderName'] ?? message.notification?.title ?? 'Restaurante';
+      final messageText = message.data['message'] ?? message.notification?.body ?? 'Nova mensagem';
+      
+      const androidDetails = AndroidNotificationDetails(
+        'chat_messages',
+        'Mensagens do Chat',
+        channelDescription: 'Notificações de novas mensagens no chat',
+        importance: Importance.high,
+        priority: Priority.high,
+        icon: 'ic_notification',
+        largeIcon: DrawableResourceAndroidBitmap('@mipmap/ic_launcher'),
+        color: Color(0xFFFFC107),
+        colorized: true,
+        enableVibration: true,
+        playSound: true,
+      );
+
+      const iosDetails = DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
+      );
+
+      const details = NotificationDetails(
+        android: androidDetails,
+        iOS: iosDetails,
+      );
+
+      await _localNotifications.show(
+        orderId.hashCode,
+        senderName,
+        messageText,
+        details,
+        payload: orderId,
+      );
+
+      debugPrint('✅ [NotificationService] Notificação de chat exibida');
+      return;
+    }
+    
+    // 📦 Notificação de PEDIDO (padrão)
     const androidDetails = AndroidNotificationDetails(
       'order_updates',
       'Atualizações de Pedidos',
@@ -259,7 +308,7 @@ class NotificationService {
       message.notification?.title ?? 'Pedido Atualizado',
       message.notification?.body ?? 'Seu pedido foi atualizado',
       details,
-      payload: message.data['orderId'],
+      payload: orderId,
     );
 
     debugPrint('✅ [NotificationService] Notificação local exibida');

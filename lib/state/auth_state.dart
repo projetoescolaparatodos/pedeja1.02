@@ -16,6 +16,7 @@ class AuthState extends ChangeNotifier {
   bool _isLoading = false;
   String? _error;
   bool _registrationComplete = false;
+  bool _isGuest = false; // ✅ NOVO: Estado de convidado
 
   // Getters
   User? get currentUser => _currentUser;
@@ -28,6 +29,7 @@ class AuthState extends ChangeNotifier {
   bool get registrationComplete => _registrationComplete;
   bool get isPartner => _restaurantData != null;
   String? get jwtToken => _authService.jwtToken;
+  bool get isGuest => _isGuest; // ✅ NOVO: Getter para modo convidado
 
   AuthState() {
     _initAuth();
@@ -380,6 +382,14 @@ class AuthState extends ChangeNotifier {
     }
   }
 
+  /// 👤 Entrar como convidado
+  void enterGuestMode() {
+    _isGuest = true;
+    _isLoading = false;
+    notifyListeners();
+    debugPrint('👤 [AuthState] Modo convidado ativado');
+  }
+
   /// 🚪 Logout
   Future<void> signOut() async {
     _isLoading = true;
@@ -402,6 +412,7 @@ class AuthState extends ChangeNotifier {
     _restaurantData = null;
     _registrationComplete = false;
     _error = null;
+    _isGuest = false; // ✅ Limpar modo convidado
     _isLoading = false;
     
     notifyListeners();

@@ -5,6 +5,8 @@ import '../../state/auth_state.dart';
 import '../../models/cart_item.dart';
 import '../profile/complete_profile_page.dart';
 import '../checkout/checkout_page.dart';
+import '../auth/signup_page.dart';
+import '../auth/login_page.dart';
 
 class CartPage extends StatelessWidget {
   const CartPage({super.key});
@@ -443,6 +445,84 @@ class CartPage extends StatelessWidget {
     debugPrint('🛒 [CHECKOUT] Iniciando processo de checkout');
     
     final authState = context.read<AuthState>();
+
+    // ✅ NOVO: Bloquear convidados
+    if (authState.isGuest) {
+      debugPrint('👤 [CHECKOUT] Usuário convidado - mostrando diálogo de login');
+      
+      if (!context.mounted) return;
+      
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          backgroundColor: const Color(0xFF0D3B3B),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: const BorderSide(color: Color(0xFFE39110), width: 2),
+          ),
+          title: const Row(
+            children: [
+              Icon(Icons.lock_outline, color: Color(0xFFE39110), size: 28),
+              SizedBox(width: 12),
+              Text(
+                'Login Necessário',
+                style: TextStyle(
+                  color: Color(0xFFE39110),
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          content: const Text(
+            'Para fazer pedidos, você precisa criar uma conta ou fazer login com uma conta válida.',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+              height: 1.5,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text(
+                'Cancelar',
+                style: TextStyle(color: Colors.white70),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context); // Fecha diálogo
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const SignupPage()),
+                );
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFE39110),
+                foregroundColor: const Color(0xFF022E28),
+              ),
+              child: const Text('Criar Conta'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context); // Fecha diálogo
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const LoginPage()),
+                );
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF74241F),
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Fazer Login'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
 
     // 📡 Atualizar dados do AuthState verificando com a API
     debugPrint('🔄 [CHECKOUT] Verificando dados atualizados na API...');

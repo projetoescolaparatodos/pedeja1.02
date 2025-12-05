@@ -237,7 +237,7 @@ class Order {
 enum OrderStatus {
   pending('pending', 'Pendente'),                        // Aguardando pagamento
   accepted('accepted', 'Pronto!'),                       // Aceito pelo entregador = Pronto ✅
-  preparing('preparing', 'Preparando seu pedido'),       // Em preparação 👨‍🍳
+  preparing('preparing', 'Preparando'),                  // Em preparação 👨‍🍳
   ready('ready', 'Pronto!'),                             // Pronto para retirada/entrega 📦
   awaitingBatch('awaiting_batch', 'Aguardando entregador'), // Aguardando lote ✋
   inBatch('in_batch', 'Saiu para entrega'),              // Em lote com entregador ✅

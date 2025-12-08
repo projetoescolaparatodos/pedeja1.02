@@ -8,6 +8,10 @@ workflows:
       app_store_connect: Codemagic CI/CD
     
     environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.pedeja.app
+      
       flutter: stable
       xcode: latest
       cocoapods: default
@@ -17,7 +21,6 @@ workflows:
       
       vars:
         BUNDLE_ID: "com.pedeja.app"
-        # APP_STORE_APPLE_ID: Deixe vazio por enquanto, você vai pegar isso no App Store Connect depois
         
     triggering:
       events:

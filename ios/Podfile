@@ -49,8 +49,15 @@ post_install do |installer|
       # Fix for Swift module issues
       config.build_settings['BUILD_LIBRARY_FOR_DISTRIBUTION'] = 'YES'
       
+      # Fix for CTweetNacl module dependency
+      config.build_settings['DEFINES_MODULE'] = 'YES'
+      
       # Fix for arm64 simulator
       config.build_settings['EXCLUDED_ARCHS[sdk=iphonesimulator*]'] = 'i386'
+      
+      # Enable module stability
+      config.build_settings['SWIFT_COMPILATION_MODE'] = 'wholemodule'
+      config.build_settings['ONLY_ACTIVE_ARCH'] = 'NO'
     end
   end
 end

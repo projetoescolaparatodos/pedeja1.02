@@ -21,6 +21,10 @@ workflows:
       
       vars:
         BUNDLE_ID: "com.pedeja.app"
+        COCOAPODS_DISABLE_STATS: "true"
+        
+    cache:
+      cache_paths: []  # Disable all caching to force clean build
         
     triggering:
       events:
@@ -55,18 +59,18 @@ workflows:
           
       - name: Get Flutter packages
         script: | 
+          flutter clean
           flutter packages pub get
       
-      - name: Clean CocoaPods cache
+      - name: Clean CocoaPods cache and install
         script: |
           cd ios
           rm -rf Pods Podfile.lock .symlinks
+          pod cache clean --all
+          pod deintegrate || true
           pod repo update
+          pod install --repo-update --verbose
           cd ..
-          
-      - name: Install pods
-        script: | 
-          find . -name "Podfile" -execdir pod install \;
           
       - name: Flutter build ipa
         script: | 

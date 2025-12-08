@@ -1,4 +1,4 @@
-package com.pedeja.vtx
+package com.pedeja.app
 
 import io.flutter.embedding.android.FlutterActivity
 

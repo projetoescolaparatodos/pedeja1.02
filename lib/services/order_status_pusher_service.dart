@@ -25,77 +25,19 @@ class OrderStatusPusherService {
   static const String _apiKey = '45b7798e358505a8343e';
   static const String _cluster = 'us2';
 
-  /// Inicializar Pusher e conectar ao canal do usuário
+  /// Inicializar Pusher e conectar ao canal do usuário (DESABILITADO)
   static Future<void> initialize({
     required String userId,
     String? authToken,
     Function(String orderId, models.OrderStatus status)? onUpdate,
   }) async {
-    try {
-      _currentUserId = userId;
-      onStatusUpdate = onUpdate;
-      
-      debugPrint('📡 [OrderStatusPusher] Inicializando para usuário $userId...');
-
-      if (!_initialized) {
-        debugPrint('📡 [OrderStatusPusher] Configurando Pusher...');
-
-        await _pusher.init(
-          apiKey: _apiKey,
-          cluster: _cluster,
-          onError: (String message, int? code, dynamic e) {
-            debugPrint('❌ [OrderStatusPusher] Erro: $message (code: $code)');
-          },
-          onConnectionStateChange: (String? currentState, String? previousState) {
-            debugPrint('🔄 [OrderStatusPusher] Estado: $previousState → $currentState');
-            
-            // ✅ Reconectar automaticamente se desconectado
-            if (currentState == 'DISCONNECTED' && _initialized && _currentUserId != null) {
-              debugPrint('🔄 [OrderStatusPusher] Reconectando...');
-              Future.delayed(const Duration(seconds: 2), () {
-                _pusher.connect().then((_) {
-                  debugPrint('✅ [OrderStatusPusher] Reconectado!');
-                }).catchError((e) {
-                  debugPrint('❌ [OrderStatusPusher] Erro ao reconectar: $e');
-                });
-              });
-            }
-          },
-          onAuthorizer: (String channelName, String socketId, dynamic options) async {
-            // Autorizar canal privado com o backend
-            debugPrint('🔐 [OrderStatusPusher] Autorizando canal: $channelName');
-            
-            // Se tiver token, enviar para backend autorizar
-            if (authToken != null) {
-              try {
-                // Backend deve ter endpoint /api/pusher/auth
-                final response = await _authorizeChannel(
-                  channelName: channelName,
-                  socketId: socketId,
-                  authToken: authToken,
-                );
-                return response;
-              } catch (e) {
-                debugPrint('❌ [OrderStatusPusher] Erro na autorização: $e');
-                return null;
-              }
-            }
-            
-            return null;
-          },
-        );
-
-        await _pusher.connect();
-        _initialized = true;
-        debugPrint('✅ [OrderStatusPusher] Pusher inicializado e conectado');
-      }
-
-      // Inscrever no canal do usuário
-      await _subscribeToUserChannel(userId);
-      
-    } catch (e) {
-      debugPrint('❌ [OrderStatusPusher] Erro ao inicializar: $e');
-    }
+    debugPrint('📡 [OrderStatusPusher] DESABILITADO - Use Firebase Cloud Messaging');
+    debugPrint('📡 [OrderStatusPusher] Usuário: $userId (notificações via FCM)');
+    _currentUserId = userId;
+    onStatusUpdate = onUpdate;
+    _initialized = true;
+    // Pusher desabilitado temporariamente devido a problemas com CTweetNacl no iOS
+    return Future.value();
   }
 
   /// Autorizar canal privado no backend

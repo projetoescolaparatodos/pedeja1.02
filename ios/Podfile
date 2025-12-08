@@ -33,9 +33,6 @@ target 'Runner' do
 
   flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
   
-  # Fix for CTweetNacl module dependency - Force specific version
-  pod 'TweetNacl', '1.0.2', :modular_headers => true
-  
   target 'RunnerTests' do
     inherit! :search_paths
   end
@@ -62,9 +59,19 @@ post_install do |installer|
       config.build_settings['SWIFT_COMPILATION_MODE'] = 'wholemodule'
       config.build_settings['ONLY_ACTIVE_ARCH'] = 'NO'
       
-      # Fix for TweetNacl/CTweetNacl
-      if target.name == 'TweetNacl'
+      # CRITICAL FIX for Xcode 16+ CTweetNacl module resolution bug
+      # See: https://github.com/bitmark-inc/tweetnacl-swiftwrap/issues/18
+      if ['PusherSwift', 'TweetNacl'].include?(target.name)
+        # Disable explicit module builds (Xcode 16+ breaks C module resolution)
+        config.build_settings['SWIFT_ENABLE_EXPLICIT_MODULES'] = 'NO'
+        config.build_settings['SWIFT_ENABLE_INCREMENTAL_COMPILATION'] = 'NO'
         config.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
+      end
+      
+      # Additional TweetNacl-specific fixes
+      if target.name == 'TweetNacl'
+        config.build_settings['MODULEMAP_FILE'] = 'TweetNacl/Sources/module.modulemap'
+        config.build_settings['HEADER_SEARCH_PATHS'] = '$(inherited) ${SRCROOT}/TweetNacl/Sources ${SRCROOT}/TweetNacl/Sources/CTweetNacl/include'
         config.build_settings['SWIFT_INCLUDE_PATHS'] = '$(inherited) ${PODS_CONFIGURATION_BUILD_DIR}/TweetNacl'
       end
     end

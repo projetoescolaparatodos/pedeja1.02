@@ -71,6 +71,20 @@ workflows:
           pod repo update
           pod install --repo-update --verbose
           cd ..
+      
+      - name: Fix TweetNacl module headers
+        script: |
+          # Create module.modulemap for CTweetNacl if missing
+          TWEETNACL_PATH="ios/Pods/TweetNacl"
+          if [ -d "$TWEETNACL_PATH" ]; then
+            echo "Fixing TweetNacl module configuration..."
+            cat > "$TWEETNACL_PATH/module.modulemap" <<EOF
+          module CTweetNacl {
+            header "TweetNacl.h"
+            export *
+          }
+          EOF
+          fi
           
       - name: Flutter build ipa
         script: | 

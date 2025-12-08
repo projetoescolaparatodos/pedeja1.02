@@ -33,6 +33,9 @@ target 'Runner' do
 
   flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
   
+  # Fix for CTweetNacl module dependency
+  pod 'TweetNacl', :modular_headers => true
+  
   target 'RunnerTests' do
     inherit! :search_paths
   end
@@ -58,6 +61,12 @@ post_install do |installer|
       # Enable module stability
       config.build_settings['SWIFT_COMPILATION_MODE'] = 'wholemodule'
       config.build_settings['ONLY_ACTIVE_ARCH'] = 'NO'
+      
+      # Fix for TweetNacl/CTweetNacl
+      if target.name == 'TweetNacl'
+        config.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
+        config.build_settings['SWIFT_INCLUDE_PATHS'] = '$(inherited) ${PODS_CONFIGURATION_BUILD_DIR}/TweetNacl'
+      end
     end
   end
 end

@@ -63,21 +63,14 @@ post_install do |installer|
       config.build_settings['ONLY_ACTIVE_ARCH'] = 'NO'
       
       # CRITICAL FIX for Xcode 16+ CTweetNacl module resolution bug
-      # See: https://github.com/bitmark-inc/tweetnacl-swiftwrap/issues/18
-      # Apply to ANY pod containing "Tweet" or "Pusher" in name
-      if target.name.include?('Tweet') || target.name.include?('Pusher')
-        puts "  → Applying Xcode 16+ fix to: #{target.name}"
-        # Disable explicit module builds (Xcode 16+ breaks C module resolution)
-        config.build_settings['SWIFT_ENABLE_EXPLICIT_MODULES'] = 'NO'
-        config.build_settings['SWIFT_ENABLE_INCREMENTAL_COMPILATION'] = 'NO'
-        config.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
-      end
+      # Applying to ALL targets to ensure no dependency is missed
+      config.build_settings['SWIFT_ENABLE_EXPLICIT_MODULES'] = 'NO'
+      config.build_settings['SWIFT_ENABLE_INCREMENTAL_COMPILATION'] = 'NO'
+      config.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
       
-      # Additional fixes for any TweetNacl variant
-      if target.name.include?('Tweet')
-        puts "  → Adding search paths for: #{target.name}"
-        # Let CocoaPods handle module map automatically - don't override
-        # Adding HEADER_SEARCH_PATHS to help locate CTweetNacl headers
+      # Specific fixes for TweetNacl/Pusher
+      if target.name.include?('Tweet') || target.name.include?('Pusher')
+        puts "  → Applying specific search paths to: #{target.name}"
         config.build_settings['HEADER_SEARCH_PATHS'] = "$(inherited) $(PODS_ROOT)/#{target.name}/Sources $(PODS_ROOT)/#{target.name}/Sources/CTweetNacl/include"
         config.build_settings['SWIFT_INCLUDE_PATHS'] = "$(inherited) $(PODS_ROOT)/#{target.name}/Sources"
       end

@@ -53,6 +53,8 @@
 	<string>Precisamos da sua localização para encontrar restaurantes próximos e calcular o tempo de entrega.</string>
 	<key>NSLocationAlwaysUsageDescription</key>
 	<string>Precisamos da sua localização para melhorar sua experiência de entrega.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Precisamos da sua localização para rastrear entregas e encontrar restaurantes próximos mesmo quando o app estiver em segundo plano.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Precisamos acessar sua câmera para você adicionar fotos ao seu perfil.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

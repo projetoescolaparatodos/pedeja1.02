@@ -46,7 +46,12 @@ Adicionei a chave `ITSAppUsesNonExemptEncryption` como `false` no `Info.plist`.
 
 ### E. Incremento de Versão (Erro de Redundância)
 O erro `Redundant Binary Upload` ocorreu porque o build anterior (que falhou na conformidade) **já tinha enviado o binário** para a Apple.
-*   **Solução:** Atualizei a versão para `1.0.1` e configurei o Codemagic para sempre usar um número de build maior (`BUILD_NUMBER + 10`), garantindo que nunca haja conflito de versão.
+*   **Solução:** Atualizei a versão para `1.0.2` e configurei o Codemagic para sempre usar um número de build maior (`BUILD_NUMBER + 20`), garantindo que nunca haja conflito de versão.
+
+### F. Correção de Privacidade (ITMS-90683)
+A Apple rejeitou o binário por falta da chave `NSLocationAlwaysAndWhenInUseUsageDescription` no `Info.plist`.
+*   **Causa:** Mesmo que o app use apenas localização "Durante o Uso", algumas dependências podem referenciar APIs de "Sempre", o que obriga a presença dessa chave descritiva desde o iOS 11.
+*   **Solução:** Adicionei a chave com uma descrição apropriada no `Info.plist`.
 
 ---
 

@@ -39,6 +39,11 @@ Atualizei o fluxo de trabalho para:
 ### C. Correção do Ícone (Transparência)
 Configurei o `flutter_launcher_icons` para remover automaticamente o canal alpha dos ícones iOS e regenerei os assets. Isso resolve o erro de validação da App Store.
 
+### D. Automação de Conformidade (Encryption)
+Adicionei a chave `ITSAppUsesNonExemptEncryption` como `false` no `Info.plist`.
+*   **Motivo:** O Codemagic falhou no pós-processamento porque a Apple exige que declaremos se o app usa criptografia.
+*   **Resultado:** O próximo build será aprovado automaticamente para testes internos/externos sem perguntas manuais.
+
 ---
 
 ## 3. Ações Necessárias (O que você precisa fazer)

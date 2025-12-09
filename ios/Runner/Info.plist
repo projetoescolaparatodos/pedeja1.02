@@ -57,5 +57,7 @@
 	<string>Precisamos acessar sua câmera para você adicionar fotos ao seu perfil.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Precisamos acessar suas fotos para você adicionar imagens ao seu perfil.</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 </dict>
 </plist>

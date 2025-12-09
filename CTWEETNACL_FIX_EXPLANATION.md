@@ -33,11 +33,14 @@ end
 
 ### 2. **Configurar Paths de Módulos Corretamente**
 
+**CRÍTICO: O arquivo é `module.map` NÃO `module.modulemap`!**
+
 ```ruby
 if target.name == 'TweetNacl'
-  config.build_settings['MODULEMAP_FILE'] = 'TweetNacl/Sources/module.modulemap'
-  config.build_settings['HEADER_SEARCH_PATHS'] = '$(inherited) ${SRCROOT}/TweetNacl/Sources ${SRCROOT}/TweetNacl/Sources/CTweetNacl/include'
-  config.build_settings['SWIFT_INCLUDE_PATHS'] = '$(inherited) ${PODS_CONFIGURATION_BUILD_DIR}/TweetNacl'
+  # IMPORTANT: File name is 'module.map' not 'module.modulemap'
+  config.build_settings['MODULEMAP_FILE'] = '$(PODS_ROOT)/TweetNacl/Sources/module.map'
+  config.build_settings['HEADER_SEARCH_PATHS'] = '$(inherited) $(PODS_ROOT)/TweetNacl/Sources $(PODS_ROOT)/TweetNacl/Sources/CTweetNacl/include'
+  config.build_settings['SWIFT_INCLUDE_PATHS'] = '$(inherited) $(PODS_ROOT)/TweetNacl/Sources'
 end
 ```
 
@@ -69,7 +72,8 @@ O Xcode 16+ não consegue resolver `CTweetNacl` como submódulo quando explicit 
 ## 🚫 O que NÃO funciona
 
 ❌ **Fixar versão do TweetNacl (1.0.2, 1.0.1, etc)** - O problema não é a versão
-❌ **Criar module.modulemap manualmente** - O arquivo já existe
+❌ **Criar module.modulemap manualmente** - O arquivo correto é `module.map`
+❌ **Usar nome errado `module.modulemap`** - Deve ser `module.map` (sem "ule")
 ❌ **Adicionar header search paths globais** - Precisa ser específico por target
 ❌ **Usar `-fmodule-map-file`** - Não resolve o problema raiz
 ❌ **Desabilitar cache do CocoaPods** - Não ajuda (problema é do Xcode)
@@ -101,9 +105,10 @@ post_install do |installer|
       end
       
       if target.name == 'TweetNacl'
-        config.build_settings['MODULEMAP_FILE'] = 'TweetNacl/Sources/module.modulemap'
-        config.build_settings['HEADER_SEARCH_PATHS'] = '$(inherited) ${SRCROOT}/TweetNacl/Sources ${SRCROOT}/TweetNacl/Sources/CTweetNacl/include'
-        config.build_settings['SWIFT_INCLUDE_PATHS'] = '$(inherited) ${PODS_CONFIGURATION_BUILD_DIR}/TweetNacl'
+        # CRITICAL: File is 'module.map' NOT 'module.modulemap'
+        config.build_settings['MODULEMAP_FILE'] = '$(PODS_ROOT)/TweetNacl/Sources/module.map'
+        config.build_settings['HEADER_SEARCH_PATHS'] = '$(inherited) $(PODS_ROOT)/TweetNacl/Sources $(PODS_ROOT)/TweetNacl/Sources/CTweetNacl/include'
+        config.build_settings['SWIFT_INCLUDE_PATHS'] = '$(inherited) $(PODS_ROOT)/TweetNacl/Sources'
       end
     end
   end

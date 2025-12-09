@@ -70,9 +70,8 @@ post_install do |installer|
       
       # Additional TweetNacl-specific fixes
       if target.name == 'TweetNacl'
-        # CRITICAL: File is 'module.map' NOT 'module.modulemap' 
-        # See: https://github.com/bitmark-inc/tweetnacl-swiftwrap/blob/master/TweetNacl.podspec
-        config.build_settings['MODULEMAP_FILE'] = '$(PODS_ROOT)/TweetNacl/Sources/module.map'
+        # Let CocoaPods handle module map automatically - don't override
+        # Adding HEADER_SEARCH_PATHS to help locate CTweetNacl headers
         config.build_settings['HEADER_SEARCH_PATHS'] = '$(inherited) $(PODS_ROOT)/TweetNacl/Sources $(PODS_ROOT)/TweetNacl/Sources/CTweetNacl/include'
         config.build_settings['SWIFT_INCLUDE_PATHS'] = '$(inherited) $(PODS_ROOT)/TweetNacl/Sources'
       end

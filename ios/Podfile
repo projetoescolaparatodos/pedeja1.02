@@ -42,6 +42,9 @@ post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
     
+    # DEBUG: Print all target names to find the correct one
+    puts "Pod target: #{target.name}"
+    
     target.build_configurations.each do |config|
       # Fix for Xcode 15+ compatibility
       config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '13.0'
@@ -61,20 +64,22 @@ post_install do |installer|
       
       # CRITICAL FIX for Xcode 16+ CTweetNacl module resolution bug
       # See: https://github.com/bitmark-inc/tweetnacl-swiftwrap/issues/18
-      # Note: PusherSwift uses KHTweetNacl (not TweetNacl)
-      if ['PusherSwift', 'KHTweetNacl'].include?(target.name)
+      # Apply to ANY pod containing "Tweet" or "Pusher" in name
+      if target.name.include?('Tweet') || target.name.include?('Pusher')
+        puts "  → Applying Xcode 16+ fix to: #{target.name}"
         # Disable explicit module builds (Xcode 16+ breaks C module resolution)
         config.build_settings['SWIFT_ENABLE_EXPLICIT_MODULES'] = 'NO'
         config.build_settings['SWIFT_ENABLE_INCREMENTAL_COMPILATION'] = 'NO'
         config.build_settings['CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES'] = 'YES'
       end
       
-      # Additional KHTweetNacl-specific fixes
-      if target.name == 'KHTweetNacl'
+      # Additional fixes for any TweetNacl variant
+      if target.name.include?('Tweet')
+        puts "  → Adding search paths for: #{target.name}"
         # Let CocoaPods handle module map automatically - don't override
         # Adding HEADER_SEARCH_PATHS to help locate CTweetNacl headers
-        config.build_settings['HEADER_SEARCH_PATHS'] = '$(inherited) $(PODS_ROOT)/KHTweetNacl/Sources $(PODS_ROOT)/KHTweetNacl/Sources/CTweetNacl/include'
-        config.build_settings['SWIFT_INCLUDE_PATHS'] = '$(inherited) $(PODS_ROOT)/KHTweetNacl/Sources'
+        config.build_settings['HEADER_SEARCH_PATHS'] = "$(inherited) $(PODS_ROOT)/#{target.name}/Sources $(PODS_ROOT)/#{target.name}/Sources/CTweetNacl/include"
+        config.build_settings['SWIFT_INCLUDE_PATHS'] = "$(inherited) $(PODS_ROOT)/#{target.name}/Sources"
       end
     end
   end

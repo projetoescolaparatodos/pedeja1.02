@@ -44,6 +44,10 @@ Adicionei a chave `ITSAppUsesNonExemptEncryption` como `false` no `Info.plist`.
 *   **Motivo:** O Codemagic falhou no pós-processamento porque a Apple exige que declaremos se o app usa criptografia.
 *   **Resultado:** O próximo build será aprovado automaticamente para testes internos/externos sem perguntas manuais.
 
+### E. Incremento de Versão (Erro de Redundância)
+O erro `Redundant Binary Upload` ocorreu porque o build anterior (que falhou na conformidade) **já tinha enviado o binário** para a Apple.
+*   **Solução:** Atualizei a versão para `1.0.1` e configurei o Codemagic para sempre usar um número de build maior (`BUILD_NUMBER + 10`), garantindo que nunca haja conflito de versão.
+
 ---
 
 ## 3. Ações Necessárias (O que você precisa fazer)

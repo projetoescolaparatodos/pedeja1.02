@@ -80,14 +80,14 @@ workflows:
           if [ -f "/Users/builder/export_options.plist" ]; then
             echo "Using export options from xcode-project"
             flutter build ipa --release \
-              --build-name=1.0.4 \
-              --build-number=$(($BUILD_NUMBER + 40)) \
+              --build-name=1.0.5 \
+              --build-number=$(($BUILD_NUMBER + 50)) \
               --export-options-plist=/Users/builder/export_options.plist
           else
             echo "No export options found, building without"
             flutter build ipa --release \
-              --build-name=1.0.4 \
-              --build-number=$(($BUILD_NUMBER + 40))
+              --build-name=1.0.5 \
+              --build-number=$(($BUILD_NUMBER + 50))
           fi
             
     artifacts:

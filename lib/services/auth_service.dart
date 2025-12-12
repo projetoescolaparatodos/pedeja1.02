@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:async';
+import 'dart:io';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -71,10 +72,27 @@ class AuthService {
   Future<void> clearCredentials() async {
     try {
       final prefs = await SharedPreferences.getInstance();
+      
+      // 🗑️ Remover TODAS as chaves relacionadas à autenticação
       await prefs.remove('isLoggedIn');
       await prefs.remove('userEmail');
       await prefs.remove('jwtToken');
-      debugPrint('🗑️ [AuthService] Credenciais limpas');
+      
+      // 🍎 iOS: Limpar TUDO do SharedPreferences
+      if (Platform.isIOS) {
+        final keys = prefs.getKeys();
+        for (String key in keys) {
+          if (key.startsWith('flutter.') || 
+              key.contains('auth') || 
+              key.contains('user') ||
+              key.contains('token')) {
+            await prefs.remove(key);
+            debugPrint('🗑️ Removendo chave iOS: $key');
+          }
+        }
+      }
+      
+      debugPrint('🗑️ [AuthService] Credenciais limpas completamente');
     } catch (e) {
       debugPrint('❌ [AuthService] Erro ao limpar credenciais: $e');
     }
@@ -447,13 +465,44 @@ class AuthService {
   /// 🚪 6. Logout
   Future<void> signOut() async {
     try {
+      // 🔥 FORÇAR LOGOUT DO FIREBASE (iOS + Android)
       await _auth.signOut();
-      await clearCredentials(); // ✅ Limpar credenciais manuais
+      
+      // 🗑️ Limpar credenciais manuais
+      await clearCredentials();
+      
+      // 🗑️ Limpar dados em memória
       _jwtToken = null;
       _userData = null;
+      _restaurantData = null;
+      
+      // 🍎 iOS FIX: Força limpeza do Keychain
+      // Desconectar completamente do Firebase
+      if (Platform.isIOS) {
+        debugPrint('🍎 [AuthService] Limpando Keychain do iOS...');
+        
+        // Aguardar para garantir que o signOut completou
+        await Future.delayed(Duration(milliseconds: 500));
+        
+        // Verificar se realmente deslogou
+        final currentUser = _auth.currentUser;
+        if (currentUser != null) {
+          debugPrint('⚠️ [AuthService] Usuário ainda logado! Forçando...');
+          
+          // Tentar deletar token manualmente
+          try {
+            await currentUser.getIdToken(true); // Force refresh
+            await _auth.signOut(); // Tentar novamente
+          } catch (e) {
+            debugPrint('🔧 [AuthService] Erro ao forçar logout: $e');
+          }
+        }
+      }
+      
       debugPrint('👋 [AuthService] Logout realizado');
     } catch (e) {
       debugPrint('❌ [AuthService] Erro ao fazer logout: $e');
+      rethrow; // Re-throw para o AuthState tratar
     }
   }
 

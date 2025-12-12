@@ -395,28 +395,56 @@ class AuthState extends ChangeNotifier {
     _isLoading = true;
     notifyListeners();
 
-    // 🔔 Limpar token FCM antes do logout
-    await NotificationService.clearToken();
-    
-    // 🛑 Parar monitoramento de pedidos
-    await OrderStatusListenerService.stopListeningToAllOrders();
-    OrderStatusListenerService.clearCache();
+    try {
+      // 🔔 Limpar token FCM antes do logout
+      await NotificationService.clearToken();
+      
+      // 🛑 Parar monitoramento de pedidos
+      await OrderStatusListenerService.stopListeningToAllOrders();
+      OrderStatusListenerService.clearCache();
 
-    // 🛑 Desconectar Pusher
-    await OrderStatusPusherService.disconnect();
+      // 🛑 Desconectar Pusher
+      await OrderStatusPusherService.disconnect();
 
-    await _authService.signOut();
-    
-    _currentUser = null;
-    _userData = null;
-    _restaurantData = null;
-    _registrationComplete = false;
-    _error = null;
-    _isGuest = false; // ✅ Limpar modo convidado
-    _isLoading = false;
-    
-    notifyListeners();
-    debugPrint('👋 [AuthState] Logout completo');
+      // 🚪 Logout do Firebase + Limpar credenciais
+      await _authService.signOut();
+      
+      // 🗑️ Limpar TODOS os estados locais
+      _currentUser = null;
+      _userData = null;
+      _restaurantData = null;
+      _registrationComplete = false;
+      _error = null;
+      _isGuest = false;
+      
+      // 🍎 iOS: Aguardar para garantir limpeza
+      if (Platform.isIOS) {
+        await Future.delayed(Duration(milliseconds: 300));
+        
+        // Verificar se Firebase realmente deslogou
+        final stillLoggedIn = FirebaseAuth.instance.currentUser;
+        if (stillLoggedIn != null) {
+          debugPrint('⚠️ [AuthState] iOS ainda tem usuário! UID: ${stillLoggedIn.uid}');
+          
+          // Forçar signOut novamente
+          await FirebaseAuth.instance.signOut();
+          await Future.delayed(Duration(milliseconds: 200));
+        }
+      }
+      
+      _isLoading = false;
+      notifyListeners();
+      
+      debugPrint('👋 [AuthState] Logout completo');
+    } catch (e) {
+      debugPrint('❌ [AuthState] Erro no logout: $e');
+      
+      // Mesmo com erro, limpar tudo
+      _currentUser = null;
+      _userData = null;
+      _isLoading = false;
+      notifyListeners();
+    }
   }
 
   /// 📧 Enviar email de recuperação

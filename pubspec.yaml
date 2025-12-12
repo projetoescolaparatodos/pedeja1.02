@@ -1,7 +1,7 @@
 ﻿name: pedeja_clean
 description: PedeJá - App de delivery limpo e otimizado
 publish_to: 'none'
-version: 1.0.4+5
+version: 1.0.5+6
 
 environment:
   sdk: ">=3.0.0 <4.0.0"

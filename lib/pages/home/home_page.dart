@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:badges/badges.dart' as badges;
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'dart:async';
 import '../../providers/catalog_provider.dart';
 import '../../models/restaurant_model.dart';
@@ -1377,11 +1378,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                       onTap: () {},
                     ),
                     _buildDrawerItem(
-                      icon: Icons.favorite,
-                      title: 'Favoritos',
-                      onTap: () {},
-                    ),
-                    _buildDrawerItem(
                       icon: Icons.person,
                       title: 'Editar Perfil',
                       onTap: () async {
@@ -1427,7 +1423,33 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                     _buildDrawerItem(
                       icon: Icons.help,
                       title: 'Ajuda',
-                      onTap: () {},
+                      onTap: () async {
+                        final navigator = Navigator.of(context);
+                        final messenger = ScaffoldMessenger.of(context);
+                        navigator.pop();
+                        
+                        final url = Uri.parse('https://pedejatermos.vercel.app/support.html');
+                        try {
+                          final canLaunch = await canLaunchUrl(url);
+                          if (canLaunch) {
+                            await launchUrl(url, mode: LaunchMode.externalApplication);
+                          } else {
+                            messenger.showSnackBar(
+                              const SnackBar(
+                                content: Text('Não foi possível abrir a página de ajuda'),
+                                backgroundColor: Colors.red,
+                              ),
+                            );
+                          }
+                        } catch (e) {
+                          messenger.showSnackBar(
+                            SnackBar(
+                              content: Text('Erro ao abrir link: $e'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
+                      },
                     ),
                     _buildDrawerItem(
                       icon: Icons.logout,

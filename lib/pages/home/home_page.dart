@@ -17,6 +17,7 @@ import '../cart/cart_page.dart';
 import '../profile/complete_profile_page.dart';
 import '../orders/orders_page.dart';
 import '../auth/login_page.dart';
+import '../settings/settings_page.dart';
 import '../../core/services/operating_hours_service.dart';
 import '../../state/auth_state.dart';
 import '../../core/cache/video_cache_manager.dart';
@@ -1412,7 +1413,16 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                     _buildDrawerItem(
                       icon: Icons.settings,
                       title: 'Configurações',
-                      onTap: () {},
+                      onTap: () {
+                        _pauseAllVideos(); // ✅ Pausar vídeos ao navegar
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const SettingsPage(),
+                          ),
+                        );
+                      },
                     ),
                     _buildDrawerItem(
                       icon: Icons.help,

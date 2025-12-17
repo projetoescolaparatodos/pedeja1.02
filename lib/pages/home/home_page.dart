@@ -35,6 +35,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   final TextEditingController _searchController = TextEditingController();
   final PageController _promoPageController = PageController();
   final Map<int, GlobalKey<PromotionalCarouselItemState>> _carouselKeys = {}; // ✅ Keys para controlar vídeos
+  final GlobalKey _searchFieldKey = GlobalKey(); // ✅ Key para scroll até o campo de busca
   
   String _searchQuery = '';
   bool _showLogo = true;
@@ -478,6 +479,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   Widget _buildSearchBar() {
     return Padding(
+      key: _searchFieldKey, // ✅ Key para scroll
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Container(
         decoration: BoxDecoration(
@@ -1368,14 +1370,30 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   padding: const EdgeInsets.all(16),
                   children: [
                     _buildDrawerItem(
-                      icon: Icons.home,
-                      title: 'Home',
+                      icon: Icons.grid_view,
+                      title: 'Catálogo',
                       onTap: () => Navigator.pop(context),
                     ),
                     _buildDrawerItem(
                       icon: Icons.search,
                       title: 'Buscar',
-                      onTap: () {},
+                      onTap: () {
+                        Navigator.pop(context);
+                        // Scroll até o campo de busca após fechar o drawer
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          final searchContext = _searchFieldKey.currentContext;
+                          if (searchContext != null) {
+                            Scrollable.ensureVisible(
+                              searchContext,
+                              duration: const Duration(milliseconds: 500),
+                              curve: Curves.easeInOut,
+                              alignment: 0.2, // Posiciona 20% do topo
+                            );
+                            // Limpar campo de busca
+                            _searchController.clear();
+                          }
+                        });
+                      },
                     ),
                     _buildDrawerItem(
                       icon: Icons.person,

@@ -1,7 +1,7 @@
 ﻿name: pedeja_clean
 description: PedeJá - App de delivery limpo e otimizado
 publish_to: 'none'
-version: 1.0.7+8
+version: 1.0.8+9
 
 environment:
   sdk: ">=3.0.0 <4.0.0"
@@ -75,7 +75,7 @@ flutter_icons:
   android: true
   ios: true
   remove_alpha_ios: true
-  image_path: "assets/images/app_icon.png"
+  image_path: "assets/images/splash.png"
 
 flutter_native_splash:
   # Logo do PedeJá centralizada em fundo laranja

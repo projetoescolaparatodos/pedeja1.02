@@ -71,16 +71,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     // ⏱️ Timer dinâmico (será cancelado e recriado quando vídeos terminarem)
     _startAutoPlayTimer();
 
-    // ✅ Listener para pausar vídeos ao scroll
+    // ✅ Listener para controlar exibição do logo
     _scrollController.addListener(() {
       setState(() {
         _showLogo = _scrollController.offset < 380;
       });
-      
-      // Pausar vídeos quando scroll passar da área de promoções (>300px)
-      if (_scrollController.offset > 300) {
-        _pauseAllVideos();
-      }
     });
 
     // ⚡ Carregar dados do catálogo em paralelo
@@ -92,18 +87,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         catalog.loadRandomProducts(),
       ]);
     });
-    
-    // ⚡ Pausar vídeos durante scroll ativo (não apenas ao passar de 300px)
-    _scrollController.addListener(_handleScrollForVideos);
-  }
-
-
-  
-  /// Pausa vídeos quando usuário está scrollando ativamente
-  void _handleScrollForVideos() {
-    if (_scrollController.position.isScrollingNotifier.value) {
-      _pauseAllVideos();
-    }
   }
 
   @override
@@ -111,7 +94,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this); // ✅ Remover observador
     _pauseAllVideos(); // ✅ Pausar vídeos ao sair da página
     _promoAutoPlayTimer?.cancel();
-    _scrollController.removeListener(_handleScrollForVideos); // ⚡ Remover listener
     _scrollController.dispose();
     _searchController.dispose();
     _promoPageController.dispose();

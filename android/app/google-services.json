@@ -76,6 +76,42 @@
           ]
         }
       }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:776278242419:android:7e6087811e71a3d33b2606",
+        "android_client_info": {
+          "package_name": "com.pedeja.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "776278242419-bo4quo8jo0rpjq7n3f9pg8tgj3h2edcb.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDpMmy2g9DOvSJf6whlswfIaNM4hawaBdU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "776278242419-bo4quo8jo0rpjq7n3f9pg8tgj3h2edcb.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "776278242419-ctmk26aj895b3fl9t1l7ckf8ks3ls1g7.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "pedeJA.vtx.pa"
+              }
+            }
+          ]
+        }
+      }
     }
   ],
   "configuration_version": "1"

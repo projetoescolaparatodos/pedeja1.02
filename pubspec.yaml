@@ -79,7 +79,7 @@ flutter_icons:
 
 flutter_native_splash:
   # Logo do PedeJá centralizada em fundo laranja
-  image: assets/images/logo-pede-ja.png
+  image: assets/images/splash1.png
   
   # ✅ Cor de fundo LARANJA (cor do app)
   color: "#E39110"
@@ -88,16 +88,16 @@ flutter_native_splash:
   fullscreen: true
   
   # ✅ Imagem centralizada (logo fica melhor centralizada)
-  image_dark: assets/images/logo-pede-ja.png
+  image_dark: assets/images/splash1.png
   color_dark: "#E39110"
   
   # Android - centralizar a logo
   android: true
   android_gravity: center
   android_12:
-    image: assets/images/logo-pede-ja.png
+    image: assets/images/splash1.png
     color: "#E39110"
-    image_dark: assets/images/logo-pede-ja.png
+    image_dark: assets/images/splash1.png
     color_dark: "#E39110"
   
   # iOS

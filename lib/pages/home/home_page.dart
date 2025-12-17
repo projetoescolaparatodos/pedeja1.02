@@ -1448,9 +1448,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         
                         final url = Uri.parse('https://pedejatermos.vercel.app/support.html');
                         try {
-                          final canLaunch = await canLaunchUrl(url);
-                          if (canLaunch) {
-                            await launchUrl(url, mode: LaunchMode.externalApplication);
+                          if (await canLaunchUrl(url)) {
+                            await launchUrl(url); // Modo padrão - funciona melhor no Android
                           } else {
                             messenger.showSnackBar(
                               const SnackBar(

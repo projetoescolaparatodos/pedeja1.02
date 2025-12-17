@@ -162,12 +162,8 @@ class SettingsPage extends StatelessWidget {
     final url = Uri.parse('https://api-pedeja.vercel.app/delete-account.html');
     
     try {
-      final canLaunch = await canLaunchUrl(url);
-      if (canLaunch) {
-        await launchUrl(
-          url,
-          mode: LaunchMode.externalApplication, // Abre no navegador externo
-        );
+      if (await canLaunchUrl(url)) {
+        await launchUrl(url); // Modo padrão - funciona melhor no Android
       } else {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(

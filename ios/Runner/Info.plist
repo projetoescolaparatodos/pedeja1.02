@@ -34,26 +34,25 @@
 			<string>UIInterfaceOrientationLandscapeLeft</string>
 			<string>UIInterfaceOrientationLandscapeRight</string>
 		</array>
-
 		<key>CADisableMinimumFrameDurationOnPhone</key>
 		<true/>
 		<key>UIApplicationSupportsIndirectInputEvents</key>
 		<true/>
 		<key>UIStatusBarHidden</key>
 		<true/>
-	<key>UIViewControllerBasedStatusBarAppearance</key>
-	<false/>
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>Precisamos da sua localização para encontrar restaurantes próximos e calcular o tempo de entrega.</string>
-	<key>NSLocationAlwaysUsageDescription</key>
-	<string>Precisamos da sua localização para melhorar sua experiência de entrega.</string>
-	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-	<string>Precisamos da sua localização para rastrear entregas e encontrar restaurantes próximos mesmo quando o app estiver em segundo plano.</string>
-	<key>NSCameraUsageDescription</key>
-	<string>Precisamos acessar sua câmera para você adicionar fotos ao seu perfil.</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Precisamos acessar suas fotos para você adicionar imagens ao seu perfil.</string>
-	<key>ITSAppUsesNonExemptEncryption</key>
-	<false/>
-</dict>
+		<key>UIViewControllerBasedStatusBarAppearance</key>
+		<false/>
+		<key>NSLocationWhenInUseUsageDescription</key>
+		<string>Precisamos da sua localização para encontrar restaurantes próximos e calcular o tempo de entrega.</string>
+		<key>NSLocationAlwaysUsageDescription</key>
+		<string>Precisamos da sua localização para melhorar sua experiência de entrega.</string>
+		<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+		<string>Precisamos da sua localização para rastrear entregas e encontrar restaurantes próximos mesmo quando o app estiver em segundo plano.</string>
+		<key>NSCameraUsageDescription</key>
+		<string>Precisamos acessar sua câmera para você adicionar fotos ao seu perfil.</string>
+		<key>NSPhotoLibraryUsageDescription</key>
+		<string>Precisamos acessar suas fotos para você adicionar imagens ao seu perfil.</string>
+		<key>ITSAppUsesNonExemptEncryption</key>
+		<false/>
+	</dict>
 </plist>

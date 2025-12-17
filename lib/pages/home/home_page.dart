@@ -1396,6 +1396,20 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                       },
                     ),
                     _buildDrawerItem(
+                      icon: Icons.restaurant_menu,
+                      title: 'Estabelecimentos',
+                      onTap: () {
+                        _pauseAllVideos(); // ✅ Pausar vídeos ao navegar
+                        Navigator.pop(context);
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const CategoriesPage(),
+                          ),
+                        );
+                      },
+                    ),
+                    _buildDrawerItem(
                       icon: Icons.person,
                       title: 'Editar Perfil',
                       onTap: () async {

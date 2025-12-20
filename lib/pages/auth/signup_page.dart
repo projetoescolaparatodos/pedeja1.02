@@ -462,7 +462,7 @@ class _SignupPageState extends State<SignupPage> {
                     return SizedBox(
                       height: 56,
                       child: ElevatedButton(
-                        onPressed: (authState.isLoading || !_isAdult) ? null : _handleSignup,
+                        onPressed: authState.isLoading ? null : _handleSignup,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF74241F),
                           foregroundColor: Colors.white,

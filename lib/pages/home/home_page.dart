@@ -271,16 +271,19 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     return products.where((p) {
       final query = _searchQuery.toLowerCase();
       
-      // ✅ Pesquisar nos badges/tags
+      // ✅ Pesquisar nos badges/tags (normalizar _ para espaço)
       final badges = p.badges as List<dynamic>? ?? [];
       final badgesText = badges
-          .map((badge) => badge.toString().toLowerCase())
+          .map((badge) => badge.toString().toLowerCase().replaceAll('_', ' '))
           .join(' ');
       
-      return (p.name?.toLowerCase().contains(query) ?? false) ||
-          (p.description?.toLowerCase().contains(query) ?? false) ||
-          (p.category?.toLowerCase().contains(query) ?? false) ||
-          badgesText.contains(query);
+      // Normalizar query também
+      final normalizedQuery = query.trim();
+      
+      return (p.name?.toLowerCase().contains(normalizedQuery) ?? false) ||
+          (p.description?.toLowerCase().contains(normalizedQuery) ?? false) ||
+          (p.category?.toLowerCase().contains(normalizedQuery) ?? false) ||
+          badgesText.contains(normalizedQuery);
     }).toList();
   }
 
@@ -290,16 +293,19 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     return products.where((p) {
       final query = _searchQuery.toLowerCase();
       
-      // ✅ Pesquisar nos badges/tags
+      // ✅ Pesquisar nos badges/tags (normalizar _ para espaço)
       final badges = p.badges as List<dynamic>? ?? [];
       final badgesText = badges
-          .map((badge) => badge.toString().toLowerCase())
+          .map((badge) => badge.toString().toLowerCase().replaceAll('_', ' '))
           .join(' ');
       
-      return (p.name?.toLowerCase().contains(query) ?? false) ||
-          (p.description?.toLowerCase().contains(query) ?? false) ||
-          (p.category?.toLowerCase().contains(query) ?? false) ||
-          badgesText.contains(query);
+      // Normalizar query também
+      final normalizedQuery = query.trim();
+      
+      return (p.name?.toLowerCase().contains(normalizedQuery) ?? false) ||
+          (p.description?.toLowerCase().contains(normalizedQuery) ?? false) ||
+          (p.category?.toLowerCase().contains(normalizedQuery) ?? false) ||
+          badgesText.contains(normalizedQuery);
     }).toList();
   }
 

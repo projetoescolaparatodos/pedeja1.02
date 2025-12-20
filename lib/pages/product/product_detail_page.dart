@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../../models/product_model.dart';
@@ -223,10 +224,25 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
           background: Stack(
             fit: StackFit.expand,
             children: [
-              Image.network(
-                widget.product.displayImage ?? '',
+              CachedNetworkImage(
+                imageUrl: widget.product.displayImage ?? '',
                 fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) {
+                placeholder: (context, url) => Container(
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [Color(0xFF5D1C17), Color(0xFF0D3B3B)],
+                    ),
+                  ),
+                  child: const Center(
+                    child: CircularProgressIndicator(
+                      color: Color(0xFFE39110),
+                      strokeWidth: 2,
+                    ),
+                  ),
+                ),
+                errorWidget: (context, url, error) {
                   return Container(
                     decoration: const BoxDecoration(
                       gradient: LinearGradient(
@@ -242,6 +258,8 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                     ),
                   );
                 },
+                maxWidthDiskCache: 1000,
+                maxHeightDiskCache: 1000,
               ),
               // Gradiente para melhor legibilidade
               Positioned.fill(

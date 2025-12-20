@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../state/cart_state.dart';
 import '../../state/auth_state.dart';
 import '../../models/cart_item.dart';
@@ -337,14 +338,22 @@ class CartPage extends StatelessWidget {
                 height: 80,
                 color: const Color(0xFF1A4747),
                 child: item.imageUrl != null && item.imageUrl!.isNotEmpty
-                    ? Image.network(
-                        item.imageUrl!,
+                    ? CachedNetworkImage(
+                        imageUrl: item.imageUrl!,
                         fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => const Icon(
+                        placeholder: (context, url) => const Center(
+                          child: CircularProgressIndicator(
+                            color: Color(0xFFE39110),
+                            strokeWidth: 2,
+                          ),
+                        ),
+                        errorWidget: (context, url, error) => const Icon(
                           Icons.fastfood,
                           color: Color(0xFFE39110),
                           size: 40,
                         ),
+                        maxWidthDiskCache: 200,
+                        maxHeightDiskCache: 200,
                       )
                     : const Icon(
                         Icons.fastfood,

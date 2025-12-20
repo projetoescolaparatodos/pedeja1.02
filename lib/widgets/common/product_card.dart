@@ -1,5 +1,6 @@
 
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../models/product_model.dart';
 import '../../pages/product/product_detail_page.dart';
 
@@ -40,22 +41,19 @@ class ProductCard extends StatelessWidget {
             // IMAGEM DE FUNDO
             Positioned.fill(
               child: product.displayImage?.isNotEmpty == true
-                  ? Image.network(
-                      product.displayImage!,
+                  ? CachedNetworkImage(
+                      imageUrl: product.displayImage!,
                       fit: BoxFit.cover,
-                      loadingBuilder: (context, child, loadingProgress) {
-                        if (loadingProgress == null) return child;
-                        return Container(
-                          color: const Color(0xFF022E28),
-                          child: const Center(
-                            child: CircularProgressIndicator(
-                              color: Color(0xFFE39110),
-                              strokeWidth: 2,
-                            ),
+                      placeholder: (context, url) => Container(
+                        color: const Color(0xFF022E28),
+                        child: const Center(
+                          child: CircularProgressIndicator(
+                            color: Color(0xFFE39110),
+                            strokeWidth: 2,
                           ),
-                        );
-                      },
-                      errorBuilder: (context, error, stackTrace) {
+                        ),
+                      ),
+                      errorWidget: (context, url, error) {
                         return Container(
                           color: const Color(0xFF022E28),
                           child: const Column(
@@ -78,6 +76,11 @@ class ProductCard extends StatelessWidget {
                           ),
                         );
                       },
+                      // Configurações para melhorar carregamento em release
+                      maxWidthDiskCache: 800,
+                      maxHeightDiskCache: 800,
+                      memCacheWidth: 400,
+                      memCacheHeight: 400,
                     )
                   : Container(
                       color: const Color(0xFF022E28),

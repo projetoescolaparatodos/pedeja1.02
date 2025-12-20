@@ -45,12 +45,6 @@ class ProductCard extends StatelessWidget {
                       imageUrl: product.displayImage!,
                       fit: BoxFit.cover,
                       
-                      // Otimizações de cache
-                      memCacheWidth: 400,
-                      memCacheHeight: 400,
-                      maxWidthDiskCache: 400,
-                      maxHeightDiskCache: 400,
-                      
                       // Enquanto carrega
                       placeholder: (_, __) => Container(
                         color: const Color(0xFF022E28),

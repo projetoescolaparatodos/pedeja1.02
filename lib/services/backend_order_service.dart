@@ -24,6 +24,7 @@ class BackendOrderService {
       debugPrint('   Restaurante: $restaurantName');
       debugPrint('   Total: R\$ ${total.toStringAsFixed(2)}');
       debugPrint('   Método: ${payment['method']}');
+      debugPrint('   Items com brandName: ${items.where((i) => i.brandName != null).map((i) => '${i.name} (${i.brandName})').join(', ')}');
 
       final response = await http.post(
         Uri.parse('$apiUrl/api/orders'),
@@ -40,6 +41,7 @@ class BackendOrderService {
             'unitPrice': item.price,         // API espera 'unitPrice' ao invés de 'price'
             'quantity': item.quantity,
             'imageUrl': item.imageUrl,
+            if (item.brandName != null) 'brandName': item.brandName,
             'addons': item.addons.map((addon) => {
               'name': addon.name,
               'price': addon.price,

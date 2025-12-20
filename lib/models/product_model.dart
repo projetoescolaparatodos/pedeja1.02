@@ -1,3 +1,5 @@
+import 'brand_variant.dart';
+
 /// Modelo de dados para produtos da API PedeJá
 class ProductModel {
   final String id;
@@ -12,6 +14,8 @@ class ProductModel {
   final bool isAvailable;
   final List<String> badges;
   final List<Addon> addons;
+  final bool hasMultipleBrands;
+  final List<BrandVariant> brands;
 
   ProductModel({
     required this.id,
@@ -26,6 +30,8 @@ class ProductModel {
     this.isAvailable = true,
     this.badges = const [],
     this.addons = const [],
+    this.hasMultipleBrands = false,
+    this.brands = const [],
   });
 
   /// Converte JSON da API para ProductModel
@@ -55,6 +61,12 @@ class ProductModel {
           price: (addon['price'] as num?)?.toDouble() ?? 0.0,
         );
       }).toList() ?? [],
+      
+      // Variantes de marcas
+      hasMultipleBrands: json['hasMultipleBrands'] ?? false,
+      brands: (json['brands'] as List<dynamic>?)
+          ?.map((b) => BrandVariant.fromJson(b as Map<String, dynamic>))
+          .toList() ?? [],
     );
   }
 
@@ -88,6 +100,25 @@ class ProductModel {
   bool get hasPromo {
     return badges.any((badge) => badge.toLowerCase() == 'promo');
   }
+
+  /// Preço mínimo (considerando variantes)
+  double get minPrice => hasMultipleBrands && brands.isNotEmpty
+      ? brands.map((b) => b.brandPrice).reduce((a, b) => a < b ? a : b)
+      : price;
+      
+  /// Preço máximo (considerando variantes)
+  double get maxPrice => hasMultipleBrands && brands.isNotEmpty
+      ? brands.map((b) => b.brandPrice).reduce((a, b) => a > b ? a : b)
+      : price;
+      
+  /// Verifica se tem range de preços
+  bool get hasPriceRange => hasMultipleBrands && minPrice != maxPrice;
+  
+  /// Formata preço mínimo para exibição
+  String get displayMinPrice => 'R\$ ${minPrice.toStringAsFixed(2).replaceAll('.', ',')}';
+  
+  /// Alias para formattedPrice
+  String get displayPrice => formattedPrice;
 }
 
 /// Modelo de adicional/complemento

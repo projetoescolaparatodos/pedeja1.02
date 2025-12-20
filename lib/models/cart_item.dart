@@ -7,6 +7,7 @@ class CartItem {
   final List<Map<String, dynamic>> addons; // Adicionais escolhidos
   final String restaurantId;    // ID do restaurante (importante!)
   final String? restaurantName; // Nome do restaurante
+  final String? brandName;      // Nome da marca (para produtos com variantes)
 
   CartItem({
     required this.id,
@@ -17,6 +18,7 @@ class CartItem {
     this.addons = const [],
     required this.restaurantId,
     this.restaurantName,
+    this.brandName,
   });
 
   // 💰 Calcula preço dos adicionais
@@ -48,6 +50,7 @@ class CartItem {
       addons: addons,
       restaurantId: restaurantId,
       restaurantName: restaurantName,
+      brandName: brandName,
     );
   }
 

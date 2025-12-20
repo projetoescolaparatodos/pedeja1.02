@@ -268,9 +268,17 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     if (_searchQuery.isEmpty) return products;
     return products.where((p) {
       final query = _searchQuery.toLowerCase();
+      
+      // ✅ Pesquisar nos badges/tags
+      final badges = p.badges as List<dynamic>? ?? [];
+      final badgesText = badges
+          .map((badge) => badge.toString().toLowerCase())
+          .join(' ');
+      
       return (p.name?.toLowerCase().contains(query) ?? false) ||
           (p.description?.toLowerCase().contains(query) ?? false) ||
-          (p.category?.toLowerCase().contains(query) ?? false);
+          (p.category?.toLowerCase().contains(query) ?? false) ||
+          badgesText.contains(query);
     }).toList();
   }
 
@@ -279,9 +287,17 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     if (_searchQuery.isEmpty) return products;
     return products.where((p) {
       final query = _searchQuery.toLowerCase();
+      
+      // ✅ Pesquisar nos badges/tags
+      final badges = p.badges as List<dynamic>? ?? [];
+      final badgesText = badges
+          .map((badge) => badge.toString().toLowerCase())
+          .join(' ');
+      
       return (p.name?.toLowerCase().contains(query) ?? false) ||
           (p.description?.toLowerCase().contains(query) ?? false) ||
-          (p.category?.toLowerCase().contains(query) ?? false);
+          (p.category?.toLowerCase().contains(query) ?? false) ||
+          badgesText.contains(query);
     }).toList();
   }
 

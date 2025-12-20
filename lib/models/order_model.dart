@@ -9,6 +9,7 @@ class OrderItem {
   final int quantity;
   final String imageUrl;
   final List<OrderItemAddon> addons;
+  final String? brandName;
 
   OrderItem({
     required this.productId,
@@ -17,6 +18,7 @@ class OrderItem {
     required this.quantity,
     required this.imageUrl,
     this.addons = const [],
+    this.brandName,
   });
 
   double get totalPrice {
@@ -36,6 +38,7 @@ class OrderItem {
       'imageUrl': imageUrl,
       'addons': addons.map((a) => a.toMap()).toList(),
       'totalPrice': totalPrice,
+      if (brandName != null) 'brandName': brandName,
     };
   }
 
@@ -50,6 +53,7 @@ class OrderItem {
               ?.map((a) => OrderItemAddon.fromMap(a as Map<String, dynamic>))
               .toList() ??
           [],
+      brandName: map['brandName'],
     );
   }
 }

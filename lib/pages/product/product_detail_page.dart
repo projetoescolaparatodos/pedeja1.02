@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../../models/product_model.dart';
+import '../../models/brand_variant.dart';
 import '../../state/cart_state.dart';
 import '../cart/cart_page.dart';
 
@@ -23,6 +24,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   final Map<String, bool> _selectedAddons = {};
   Map<String, dynamic>? _productData;
   bool _isLoading = true;
+  BrandVariant? _selectedBrand;
 
   @override
   void initState() {
@@ -79,8 +81,27 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     return [];
   }
 
+  List<BrandVariant> get _brands {
+    if (!widget.product.hasMultipleBrands) return [];
+    return widget.product.brands;
+  }
+
+  double get _currentPrice {
+    if (_selectedBrand != null) {
+      return _selectedBrand!.brandPrice;
+    }
+    return widget.product.price;
+  }
+
+  int get _currentStock {
+    if (_selectedBrand != null) {
+      return _selectedBrand!.brandStock;
+    }
+    return 999; // Estoque padrão para produtos sem variantes
+  }
+
   double get _totalPrice {
-    double total = widget.product.price * _quantity;
+    double total = _currentPrice * _quantity;
 
     for (var addon in _addons) {
       if (_selectedAddons[addon['name']] == true) {
@@ -127,6 +148,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                         _buildProductInfo(),
                         if (_badges.isNotEmpty) _buildBadgesSection(),
                         _buildDescription(),
+                        if (_brands.isNotEmpty) _buildBrandSelector(),
                         if (_addons.isNotEmpty) _buildAddonsSection(),
                         const SizedBox(height: 100),
                       ],
@@ -422,6 +444,108 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     );
   }
 
+  Widget _buildBrandSelector() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Selecione a Marca',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+              shadows: [
+                Shadow(
+                  color: Colors.white.withValues(alpha: 0.5),
+                  blurRadius: 8,
+                  offset: const Offset(0, 0),
+                ),
+                Shadow(
+                  color: Colors.black.withValues(alpha: 0.3),
+                  blurRadius: 4,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            decoration: BoxDecoration(
+              color: const Color(0xFF0D3B3B).withValues(alpha: 0.6),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: const Color(0xFFE39110).withValues(alpha: 0.3),
+                width: 1,
+              ),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<BrandVariant>(
+                value: _selectedBrand,
+                hint: const Text(
+                  'Escolha uma marca',
+                  style: TextStyle(color: Colors.white70),
+                ),
+                isExpanded: true,
+                dropdownColor: const Color(0xFF0D3B3B),
+                style: const TextStyle(color: Colors.white, fontSize: 16),
+                icon: const Icon(Icons.arrow_drop_down, color: Color(0xFFE39110)),
+                items: _brands.map((brand) {
+                  return DropdownMenuItem<BrandVariant>(
+                    value: brand,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            brand.brandName,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                        Text(
+                          'R\$ ${brand.brandPrice.toStringAsFixed(2).replaceAll('.', ',')}',
+                          style: const TextStyle(
+                            color: Color(0xFFE39110),
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+                onChanged: (BrandVariant? newBrand) {
+                  setState(() {
+                    _selectedBrand = newBrand;
+                  });
+                },
+              ),
+            ),
+          ),
+          if (_selectedBrand != null) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                const Icon(Icons.inventory_2_outlined, color: Colors.white70, size: 16),
+                const SizedBox(width: 6),
+                Text(
+                  'Estoque: $_currentStock unidades',
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 14,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Widget _buildAddonsSection() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
@@ -587,6 +711,30 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                   onPressed: () {
                     final cart = context.read<CartState>();
 
+                    // Validar seleção de marca se necessário
+                    if (widget.product.hasMultipleBrands && _selectedBrand == null) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('⚠️ Selecione uma marca antes de adicionar ao carrinho'),
+                          backgroundColor: Color(0xFF74241F),
+                          duration: Duration(seconds: 2),
+                        ),
+                      );
+                      return;
+                    }
+
+                    // Validar estoque
+                    if (_currentStock < _quantity) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('⚠️ Estoque insuficiente. Disponível: $_currentStock'),
+                          backgroundColor: const Color(0xFF74241F),
+                          duration: const Duration(seconds: 2),
+                        ),
+                      );
+                      return;
+                    }
+
                     // Coleta adicionais selecionados
                     final selectedAddonsList = <Map<String, dynamic>>[];
 
@@ -601,17 +749,16 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                     }
 
                     // ✅ Adiciona ao carrinho
-                    // IMPORTANTE: price deve ser APENAS o preço base do produto
-                    // Os adicionais são enviados separadamente no array 'addons'
                     for (int i = 0; i < _quantity; i++) {
                       cart.addItem(
                         productId: widget.product.id,
                         name: widget.product.name,
-                        price: widget.product.price, // ✅ APENAS preço base
+                        price: _currentPrice,
                         imageUrl: widget.product.displayImage,
                         addons: selectedAddonsList,
                         restaurantId: widget.product.restaurantId,
                         restaurantName: widget.product.restaurantName ?? 'Restaurante',
+                        brandName: _selectedBrand?.brandName,
                       );
                     }
 

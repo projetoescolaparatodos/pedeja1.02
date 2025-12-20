@@ -142,19 +142,6 @@ class ProductCard extends StatelessWidget {
                 ),
               ),
 
-            // BADGES DO PRODUTO (topo esquerdo)
-            if (product.badges.isNotEmpty)
-              Positioned(
-                top: 8,
-                left: 8,
-                right: restaurantName != null ? 70 : 8,
-                child: Wrap(
-                  spacing: 4,
-                  runSpacing: 4,
-                  children: product.badges.map((badge) => _buildBadge(badge)).toList(),
-                ),
-              ),
-
             // TEXTOS E PREÇO (parte inferior)
             Positioned(
               left: 12,
@@ -181,28 +168,6 @@ class ProductCard extends StatelessWidget {
                     ),
                   ),
 
-                  // DESCRIÇÃO (opcional)
-                  if (product.description != null && product.description!.trim().isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Text(
-                        product.description!.trim(),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: Colors.white70,
-                          fontSize: 11,
-                          height: 1.2,
-                          shadows: [
-                            Shadow(
-                              color: Colors.black.withValues(alpha: 0.6),
-                              blurRadius: 2,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-
                   // BADGE DE PREÇO (circular no canto inferior esquerdo)
                   Padding(
                     padding: const EdgeInsets.only(top: 8),
@@ -220,7 +185,9 @@ class ProductCard extends StatelessWidget {
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(
-                        product.formattedPrice,
+                        product.hasPriceRange 
+                            ? 'A partir de ${product.displayMinPrice}'
+                            : product.formattedPrice,
                         style: const TextStyle(
                           color: Color(0xFFE39110), // Texto dourado
                           fontSize: 13,
@@ -229,6 +196,28 @@ class ProductCard extends StatelessWidget {
                       ),
                     ),
                   ),
+                  
+                  // Badge de múltiplas marcas
+                  if (product.hasMultipleBrands && product.brands.isNotEmpty)
+                    Positioned(
+                      top: 8,
+                      left: 8,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFE39110).withValues(alpha: 0.9),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          '${product.brands.length} marcas',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -262,83 +251,6 @@ class ProductCard extends StatelessWidget {
       return Hero(tag: heroTag!, child: clickable);
     }
     return clickable;
-  }
-
-  /// Constrói badge individual com ícone e cor específica
-  Widget _buildBadge(String badge) {
-    // Configuração de cores e ícones por tipo de badge
-    final Map<String, Map<String, dynamic>> badgeConfig = {
-      'vegano': {
-        'label': 'Vegano',
-        'icon': Icons.eco,
-        'color': const Color(0xFF8BC34A),
-      },
-      'vegetariano': {
-        'label': 'Vegetariano',
-        'icon': Icons.eco,
-        'color': const Color(0xFF8BC34A),
-      },
-      'sem_gluten': {
-        'label': 'Sem Glúten',
-        'icon': Icons.health_and_safety,
-        'color': const Color(0xFF4CAF50),
-      },
-      'promo': {
-        'label': 'Promoção',
-        'icon': Icons.local_fire_department,
-        'color': const Color(0xFFFF6F3D),
-      },
-      'novo': {
-        'label': 'Novo',
-        'icon': Icons.fiber_new,
-        'color': const Color(0xFFE39110),
-      },
-      'picante': {
-        'label': 'Picante',
-        'icon': Icons.whatshot,
-        'color': const Color(0xFFFF5722),
-      },
-    };
-
-    final config = badgeConfig[badge.toLowerCase()] ?? {
-      'label': badge,
-      'icon': Icons.star,
-      'color': const Color(0xFFDA9528),
-    };
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-      decoration: BoxDecoration(
-        color: (config['color'] as Color).withValues(alpha: 0.95),
-        borderRadius: BorderRadius.circular(8),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.3),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            config['icon'] as IconData,
-            size: 12,
-            color: Colors.white,
-          ),
-          const SizedBox(width: 3),
-          Text(
-            config['label'] as String,
-            style: const TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-            ),
-          ),
-        ],
-      ),
-    );
   }
 
   void _navigateToDetail(BuildContext context) {

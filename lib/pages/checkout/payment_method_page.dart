@@ -127,6 +127,7 @@ class _PaymentMethodPageState extends State<PaymentMethodPage> {
                     price: (addon['price'] as num? ?? 0).toDouble(),
                   ))
               .toList(),
+          brandName: cartItem.brandName,
         );
       }).toList();
 

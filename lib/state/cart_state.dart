@@ -30,11 +30,13 @@ class CartState extends ChangeNotifier {
     List<Map<String, dynamic>> addons = const [],
     required String restaurantId,
     String? restaurantName,
+    String? brandName,
   }) {
     // Verifica se já existe no carrinho
     final existingIndex = _items.indexWhere((item) => 
       item.id == productId && 
-      _addonsAreEqual(item.addons, addons)
+      _addonsAreEqual(item.addons, addons) &&
+      item.brandName == brandName
     );
 
     if (existingIndex >= 0) {
@@ -51,8 +53,7 @@ class CartState extends ChangeNotifier {
         imageUrl: imageUrl,
         addons: addons,
         restaurantId: restaurantId,
-        restaurantName: restaurantName,
-      ));
+        restaurantName: restaurantName,        brandName: brandName,      ));
     }
 
     notifyListeners();

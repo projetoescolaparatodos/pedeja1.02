@@ -15,6 +15,7 @@
     this.createdAt,
     this.updatedAt,
     this.apiIsOpen,
+    this.minimumOrder = 0.0,
   });
 
   final String id;
@@ -32,6 +33,7 @@
   final DateTime? createdAt;
   final DateTime? updatedAt;
   final bool? apiIsOpen;
+  final double minimumOrder;
 
   bool get isOpen => apiIsOpen ?? (approved && isActive && paymentStatus.toLowerCase() == 'adimplente');
   bool get canAcceptOrders => isOpen;
@@ -65,6 +67,7 @@
           ? DateTime.tryParse(json['updatedAt'].toString())
           : null,
       apiIsOpen: apiIsOpenValue,
+      minimumOrder: (json['minimumOrder'] ?? 0).toDouble(),
     );
   }
 
@@ -85,6 +88,7 @@
       'createdAt': createdAt?.toIso8601String(),
       'updatedAt': updatedAt?.toIso8601String(),
       'apiIsOpen': apiIsOpen,
+      'minimumOrder': minimumOrder,
     };
   }
 }

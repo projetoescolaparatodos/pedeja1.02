@@ -109,6 +109,39 @@ class CartState extends ChangeNotifier {
     return _items.isNotEmpty ? _items.first.restaurantId : null;
   }
 
+  // 🏪 Agrupa itens por restaurante
+  Map<String, List<CartItem>> get itemsByRestaurant {
+    final Map<String, List<CartItem>> grouped = {};
+    
+    for (var item in _items) {
+      if (!grouped.containsKey(item.restaurantId)) {
+        grouped[item.restaurantId] = [];
+      }
+      grouped[item.restaurantId]!.add(item);
+    }
+    
+    return grouped;
+  }
+
+  // 💰 Calcula subtotal de um restaurante específico
+  double getRestaurantSubtotal(String restaurantId) {
+    return _items
+        .where((item) => item.restaurantId == restaurantId)
+        .fold(0.0, (sum, item) => sum + item.totalPrice);
+  }
+
+  // 📉 Calcula quanto falta para atingir o pedido mínimo
+  double getMissingAmount(String restaurantId, double minimumOrder) {
+    final subtotal = getRestaurantSubtotal(restaurantId);
+    final missing = minimumOrder - subtotal;
+    return missing > 0 ? missing : 0;
+  }
+
+  // ✅ Verifica se o restaurante atingiu o pedido mínimo
+  bool meetsMinimum(String restaurantId, double minimumOrder) {
+    return getRestaurantSubtotal(restaurantId) >= minimumOrder;
+  }
+
   // 🔄 Define estado de loading
   void setLoading(bool loading) {
     _isLoading = loading;

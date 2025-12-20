@@ -7,17 +7,18 @@ import '../../state/auth_state.dart';
 import '../../state/cart_state.dart';
 import '../payment/pix_payment_page.dart';
 import '../payment/card_checkout_page.dart'; // ✅ Checkout Pro
-import '../orders/orders_page.dart';
 
 /// Página de seleção do método de pagamento
 class PaymentMethodPage extends StatefulWidget {
   final String restaurantId;
   final String restaurantName;
+  final List<dynamic>? specificItems; // Lista específica de itens para este restaurante
 
   const PaymentMethodPage({
     super.key,
     required this.restaurantId,
     required this.restaurantName,
+    this.specificItems, // Opcional: se não fornecido, usa todos do carrinho
   });
 
   @override
@@ -70,8 +71,14 @@ class _PaymentMethodPageState extends State<PaymentMethodPage> {
       final cartState = context.read<CartState>();
       final authState = context.read<AuthState>();
 
-      // 1. Validar carrinho
-      if (cartState.items.isEmpty) {
+      // 1. Validar carrinho e filtrar itens deste restaurante
+      final allItems = cartState.items;
+      
+      // Usar itens específicos passados OU filtrar do carrinho pelo restaurantId
+      final restaurantItems = widget.specificItems ?? 
+          allItems.where((item) => item.restaurantId == widget.restaurantId).toList();
+      
+      if (restaurantItems.isEmpty) {
         throw Exception('Carrinho vazio');
       }
 
@@ -113,8 +120,8 @@ class _PaymentMethodPageState extends State<PaymentMethodPage> {
         throw Exception('Formato de endereço inválido');
       }
 
-      // 3. Converter itens do carrinho
-      final orderItems = cartState.items.map((cartItem) {
+      // 3. Converter itens do restaurante (não todos do carrinho)
+      final orderItems = restaurantItems.map((cartItem) {
         return models.OrderItem(
           productId: cartItem.id,
           name: cartItem.name,
@@ -122,7 +129,7 @@ class _PaymentMethodPageState extends State<PaymentMethodPage> {
           quantity: cartItem.quantity,
           imageUrl: cartItem.imageUrl ?? '',
           addons: cartItem.addons
-              .map((addon) => models.OrderItemAddon(
+              .map<models.OrderItemAddon>((addon) => models.OrderItemAddon(
                     name: addon['name'] as String? ?? '',
                     price: (addon['price'] as num? ?? 0).toDouble(),
                   ))
@@ -150,7 +157,13 @@ class _PaymentMethodPageState extends State<PaymentMethodPage> {
         }
       }
 
-      // 5. Preparar endereço formatado
+      // 5. Calcular total apenas deste restaurante
+      final restaurantTotal = restaurantItems.fold<double>(
+        0, 
+        (sum, item) => sum + item.totalPrice,
+      );
+
+      // 6. Preparar endereço formatado
       Map<String, dynamic> addressData;
       
       if (address is Map) {
@@ -161,13 +174,13 @@ class _PaymentMethodPageState extends State<PaymentMethodPage> {
         addressData = {'fullAddress': deliveryAddress};
       }
 
-      // 6. Criar pedido via API do backend (já salva no Firebase internamente)
+      // 7. Criar pedido via API do backend (já salva no Firebase internamente)
       final orderId = await _backendOrderService.createOrder(
         token: authState.jwtToken ?? '',
         restaurantId: widget.restaurantId,
         restaurantName: widget.restaurantName,
         items: orderItems,
-        total: cartState.total,
+        total: restaurantTotal, // ✅ Total apenas deste restaurante
         deliveryAddress: addressData,
         payment: paymentData,
         userName: userData['name']?.toString(),
@@ -176,27 +189,21 @@ class _PaymentMethodPageState extends State<PaymentMethodPage> {
 
       debugPrint('✅ Pedido criado via API: $orderId');
 
-      // 7. Salvar total ANTES de limpar carrinho
-      final totalAmount = cartState.total;
+      // 8. Salvar total ANTES de limpar itens
+      final totalAmount = restaurantTotal;
 
-      // 8. Limpar carrinho
-      cartState.clear();
+      // 9. Limpar APENAS os itens deste restaurante do carrinho
+      for (var item in restaurantItems) {
+        cartState.removeItem(item.id);
+      }
 
-      // 9. Redirecionar conforme método
+      // 10. Redirecionar conforme método
       if (mounted) {
         if (_selectedMethod == 'cash') {
-          // Pedido em dinheiro - vai direto para pedidos
+          // Pedido em dinheiro - retornar sucesso para coordinator
           final changeMessage = _needsChange 
               ? '. Troco para R\$ ${_changeController.text}' 
               : '';
-          
-          // ✅ Usar push ao invés de pushAndRemoveUntil para manter botão de voltar
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => const OrdersPage(),
-            ),
-          );
           
           // Mostrar confirmação
           ScaffoldMessenger.of(context).showSnackBar(
@@ -205,9 +212,16 @@ class _PaymentMethodPageState extends State<PaymentMethodPage> {
                 '✅ Pedido confirmado! Pague R\$ ${totalAmount.toStringAsFixed(2)} na entrega$changeMessage',
               ),
               backgroundColor: Colors.green,
-              duration: const Duration(seconds: 5),
+              duration: const Duration(seconds: 3),
             ),
           );
+          
+          // Retornar sucesso após delay
+          await Future.delayed(const Duration(seconds: 1));
+          
+          if (mounted) {
+            Navigator.pop(context, {'success': true, 'orderId': orderId});
+          }
         } else if (_selectedMethod == 'credit_card' || _selectedMethod == 'debit_card') {
           // Cartão de Crédito/Débito - Checkout Pro do Mercado Pago
           Navigator.pushReplacement(
@@ -242,6 +256,12 @@ class _PaymentMethodPageState extends State<PaymentMethodPage> {
         _errorMessage = e.toString().replaceAll('Exception: ', '');
         _isLoading = false;
       });
+      
+      // Opcional: Retornar erro após alguns segundos
+      // await Future.delayed(const Duration(seconds: 3));
+      // if (mounted) {
+      //   Navigator.pop(context, {'success': false, 'error': _errorMessage});
+      // }
     }
   }
 

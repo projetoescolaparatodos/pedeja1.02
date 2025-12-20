@@ -3,10 +3,14 @@ import 'package:provider/provider.dart';
 import '../../state/cart_state.dart';
 import '../../state/auth_state.dart';
 import '../../models/cart_item.dart';
+import '../../models/restaurant_model.dart';
 import '../profile/complete_profile_page.dart';
-import '../checkout/checkout_page.dart';
+import '../checkout/multi_order_coordinator_page.dart';
+import '../checkout/payment_method_page.dart';
 import '../auth/signup_page.dart';
 import '../auth/login_page.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
 class CartPage extends StatelessWidget {
   const CartPage({super.key});
@@ -43,21 +47,8 @@ class CartPage extends StatelessWidget {
                   return _buildEmptyCart();
                 }
 
-                // ✅ LISTA DE ITENS + RESUMO
-                return ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: cart.items.length + 1, // +1 para resumo
-                  itemBuilder: (context, index) {
-                    // 💰 RESUMO (última posição)
-                    if (index == cart.items.length) {
-                      return _buildCartSummary(context, cart);
-                    }
-
-                    // 📦 ITEM DO CARRINHO
-                    final item = cart.items[index];
-                    return _buildCartItem(context, cart, item);
-                  },
-                );
+                // ✅ LISTA DE ITENS AGRUPADOS POR RESTAURANTE + RESUMO
+                return _buildCartWithRestaurants(cart);
               },
             ),
           ),
@@ -103,6 +94,191 @@ class CartPage extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  // 🏪 NOVO: Constrói o carrinho agrupado por restaurante
+  Widget _buildCartWithRestaurants(CartState cart) {
+    final itemsByRestaurant = cart.itemsByRestaurant;
+    final restaurantIds = itemsByRestaurant.keys.toList();
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: restaurantIds.length + 1, // +1 para resumo final
+      itemBuilder: (context, index) {
+        // 💰 RESUMO FINAL (última posição)
+        if (index == restaurantIds.length) {
+          return _buildCartSummary(context, cart);
+        }
+
+        // 🏪 SEÇÃO DE RESTAURANTE
+        final restaurantId = restaurantIds[index];
+        final items = itemsByRestaurant[restaurantId]!;
+        
+        return _buildRestaurantSection(context, cart, restaurantId, items);
+      },
+    );
+  }
+
+  // 🏪 Seção de um restaurante específico no carrinho
+  Widget _buildRestaurantSection(
+    BuildContext context,
+    CartState cart,
+    String restaurantId,
+    List<CartItem> items,
+  ) {
+    return FutureBuilder<RestaurantModel?>(
+      future: _fetchRestaurant(restaurantId),
+      builder: (context, snapshot) {
+        final restaurant = snapshot.data;
+        final restaurantName = restaurant?.name ?? items.first.restaurantName ?? 'Restaurante';
+        final minimumOrder = restaurant?.minimumOrder ?? 0.0;
+        final subtotal = cart.getRestaurantSubtotal(restaurantId);
+        final missing = cart.getMissingAmount(restaurantId, minimumOrder);
+        final meetsMinimum = cart.meetsMinimum(restaurantId, minimumOrder);
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 🏪 HEADER DO RESTAURANTE
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1A4747),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.restaurant,
+                        color: Color(0xFFE39110),
+                        size: 20,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          restaurantName,
+                          style: const TextStyle(
+                            color: Color(0xFFE39110),
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  
+                  // 📊 BARRA DE PROGRESSO DO PEDIDO MÍNIMO
+                  if (minimumOrder > 0) ...[
+                    const SizedBox(height: 12),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              meetsMinimum
+                                  ? '✅ Pedido mínimo atingido!'
+                                  : 'Pedido mínimo: R\$ ${minimumOrder.toStringAsFixed(2).replaceAll('.', ',')}',
+                              style: TextStyle(
+                                color: meetsMinimum 
+                                    ? Colors.greenAccent 
+                                    : Colors.orangeAccent,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            if (!meetsMinimum)
+                              Text(
+                                'Faltam R\$ ${missing.toStringAsFixed(2).replaceAll('.', ',')}',
+                                style: const TextStyle(
+                                  color: Colors.orangeAccent,
+                                  fontSize: 12,
+                                ),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(4),
+                          child: LinearProgressIndicator(
+                            value: minimumOrder > 0 
+                                ? (subtotal / minimumOrder).clamp(0.0, 1.0)
+                                : 1.0,
+                            backgroundColor: Colors.white24,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              meetsMinimum ? Colors.greenAccent : Colors.orangeAccent,
+                            ),
+                            minHeight: 8,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            
+            const SizedBox(height: 12),
+            
+            // 📦 ITENS DESTE RESTAURANTE
+            ...items.map((item) => Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _buildCartItem(context, cart, item),
+            )),
+            
+            const SizedBox(height: 24),
+          ],
+        );
+      },
+    );
+  }
+
+  // 🔍 Busca dados do restaurante
+  Future<RestaurantModel?> _fetchRestaurant(String restaurantId) async {
+    try {
+      final response = await http.get(
+        Uri.parse('https://api-pedeja.vercel.app/api/restaurants/$restaurantId'),
+      );
+
+      if (response.statusCode == 200) {
+        final decoded = json.decode(response.body);
+        final restaurantData = decoded is Map<String, dynamic> ? decoded : decoded['data'];
+        
+        if (restaurantData != null) {
+          return RestaurantModel.fromJson(restaurantData);
+        }
+      }
+    } catch (e) {
+      debugPrint('Erro ao buscar restaurante: $e');
+    }
+    
+    return null;
+  }
+
+  // ✅ Verifica se todos os restaurantes atingiram o pedido mínimo
+  Future<Map<String, bool>> _checkAllMinimumsReached(CartState cart) async {
+    final itemsByRestaurant = cart.itemsByRestaurant;
+    final Map<String, bool> results = {};
+
+    for (var entry in itemsByRestaurant.entries) {
+      final restaurantId = entry.key;
+      final restaurant = await _fetchRestaurant(restaurantId);
+      final minimumOrder = restaurant?.minimumOrder ?? 0.0;
+      
+      // Se não tem pedido mínimo (0), considera como atingido
+      if (minimumOrder == 0) {
+        results[restaurantId] = true;
+      } else {
+        final subtotal = cart.getRestaurantSubtotal(restaurantId);
+        results[restaurantId] = subtotal >= minimumOrder;
+      }
+    }
+
+    return results;
   }
 
   Widget _buildEmptyCart() {
@@ -321,108 +497,120 @@ class CartPage extends StatelessWidget {
   }
 
   Widget _buildCartSummary(BuildContext context, CartState cart) {
-    final bool belowMinimum = cart.total < 10.0;
+    return FutureBuilder<Map<String, bool>>(
+      future: _checkAllMinimumsReached(cart),
+      builder: (context, snapshot) {
+        final allMinimumsReached = snapshot.data;
+        final canCheckout = allMinimumsReached?.values.every((met) => met) ?? false;
+        final blockedRestaurants = allMinimumsReached?.entries
+            .where((entry) => !entry.value)
+            .map((entry) => entry.key)
+            .toList() ?? [];
 
-    return Column(
-      children: [
-        const SizedBox(height: 16),
-        Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: const Color(0xFF1A4747),
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.3),
-                blurRadius: 8,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: Column(
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Total',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFFE39110),
-                    ),
-                  ),
-                  Text(
-                    'R\$ ${cart.total.toStringAsFixed(2).replaceAll('.', ',')}',
-                    style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFFE39110),
-                    ),
+        return Column(
+          children: [
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1A4747),
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.3),
+                    blurRadius: 8,
+                    offset: const Offset(0, 4),
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
-
-              // ⚠️ AVISO DE VALOR MÍNIMO
-              if (belowMinimum)
-                Container(
-                  margin: const EdgeInsets.only(bottom: 16),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.orange.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.orange, width: 1),
-                  ),
-                  child: const Row(
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Icon(Icons.info_outline, color: Colors.orange, size: 20),
-                      SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Valor mínimo do pedido: R\$ 10,00',
-                          style: TextStyle(
-                            color: Colors.orange,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                          ),
+                      const Text(
+                        'Total',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFFE39110),
+                        ),
+                      ),
+                      Text(
+                        'R\$ ${cart.total.toStringAsFixed(2).replaceAll('.', ',')}',
+                        style: const TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFFE39110),
                         ),
                       ),
                     ],
                   ),
-                ),
+                  const SizedBox(height: 16),
 
-              // 🚀 BOTÃO FINALIZAR PEDIDO
-              SizedBox(
-                width: double.infinity,
-                height: 54,
-                child: ElevatedButton(
-                  onPressed: belowMinimum ? null : () => _processCheckout(context),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF74241F), // Vinho
-                    foregroundColor: Colors.white,
-                    disabledBackgroundColor: Colors.grey.shade400,
-                    disabledForegroundColor: Colors.grey.shade600,
-                    elevation: 4,
-                    shadowColor: Colors.black.withValues(alpha: 0.5),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                  // ⚠️ AVISO DE PEDIDOS MÍNIMOS NÃO ATINGIDOS
+                  if (!canCheckout && blockedRestaurants.isNotEmpty)
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 16),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.orange, width: 1),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.info_outline, color: Colors.orange, size: 20),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              blockedRestaurants.length == 1
+                                  ? 'Complete o pedido mínimo para prosseguir'
+                                  : '${blockedRestaurants.length} restaurantes não atingiram o pedido mínimo',
+                              style: const TextStyle(
+                                color: Colors.orange,
+                                fontSize: 14,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                  // 🚀 BOTÃO FINALIZAR PEDIDO
+                  SizedBox(
+                    width: double.infinity,
+                    height: 54,
+                    child: ElevatedButton(
+                      onPressed: canCheckout ? () => _processCheckout(context) : null,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF74241F), // Vinho
+                        foregroundColor: Colors.white,
+                        disabledBackgroundColor: Colors.grey.shade600,
+                        disabledForegroundColor: Colors.grey.shade400,
+                        elevation: 4,
+                        shadowColor: Colors.black.withValues(alpha: 0.5),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: const Text(
+                        'Finalizar Pedido',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
                   ),
-                  child: const Text(
-                    'Finalizar Pedido',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
+                ],
               ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 100),
-      ],
+            ),
+            const SizedBox(height: 100),
+          ],
+        );
+      },
     );
   }
 
@@ -683,18 +871,13 @@ class CartPage extends StatelessWidget {
 
     debugPrint('✅ [CHECKOUT] Perfil completo - prosseguindo...');
     
-    // ✅ Perfil completo → Continua com checkout
-    Navigator.pop(context); // Fecha carrinho
-
-    await Future.delayed(const Duration(milliseconds: 100));
-
-    if (!context.mounted) return;
-
-    // 🚀 Navegar para tela de checkout com pagamento
+    // 🚀 Preparar checkout
     final cartState = context.read<CartState>();
     
     // Verificar se há itens no carrinho
     if (cartState.items.isEmpty) {
+      if (!context.mounted) return;
+      
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Carrinho vazio'),
@@ -704,21 +887,91 @@ class CartPage extends StatelessWidget {
       return;
     }
 
-    // Pegar dados do restaurante (primeiro item do carrinho)
-    final firstItem = cartState.items.first;
-    final restaurantId = firstItem.restaurantId;
-    final restaurantName = firstItem.restaurantName ?? 'Restaurante';
+    // ✅ VALIDAÇÃO: Verificar pedido mínimo por restaurante
+    final itemsByRestaurant = cartState.itemsByRestaurant;
+    
+    for (var entry in itemsByRestaurant.entries) {
+      final restaurantId = entry.key;
+      final items = entry.value;
+      final restaurantName = items.first.restaurantName ?? 'Restaurante';
+      
+      try {
+        // Buscar dados do restaurante
+        final response = await http.get(
+          Uri.parse('https://api-pedeja.vercel.app/api/restaurants/$restaurantId'),
+        );
 
-    // Navegar para checkout
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => CheckoutPage(
-          restaurantId: restaurantId,
-          restaurantName: restaurantName,
+        if (response.statusCode == 200) {
+          final decoded = json.decode(response.body);
+          final restaurantData = decoded is Map<String, dynamic> ? decoded : decoded['data'];
+          
+          if (restaurantData != null) {
+            final restaurant = RestaurantModel.fromJson(restaurantData);
+            final minimumOrder = restaurant.minimumOrder;
+            
+            if (minimumOrder > 0) {
+              final subtotal = cartState.getRestaurantSubtotal(restaurantId);
+              
+              if (subtotal < minimumOrder) {
+                final missing = minimumOrder - subtotal;
+                
+                if (!context.mounted) return;
+                
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      '⚠️ $restaurantName: Faltam R\$ ${missing.toStringAsFixed(2).replaceAll('.', ',')} para o pedido mínimo',
+                    ),
+                    backgroundColor: Colors.orange,
+                    duration: const Duration(seconds: 4),
+                  ),
+                );
+                
+                return; // Bloqueia checkout SEM fechar o carrinho
+              }
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint('Erro ao validar pedido mínimo: $e');
+      }
+    }
+    
+    // ✅ Todas as validações passaram → Decidir navegação
+    if (!context.mounted) return;
+    
+    // Guarda referência ao Navigator raiz ANTES de fechar o modal
+    final navigator = Navigator.of(context, rootNavigator: true);
+    
+    // Fecha o modal do carrinho
+    Navigator.pop(context);
+    
+    // Verificar quantos restaurantes diferentes
+    if (itemsByRestaurant.length == 1) {
+      // ✅ Apenas 1 restaurante: vai direto para PaymentMethodPage
+      final restaurantId = itemsByRestaurant.keys.first;
+      final items = itemsByRestaurant[restaurantId]!;
+      final restaurantName = items.first.restaurantName ?? 'Restaurante';
+      
+      navigator.push(
+        MaterialPageRoute(
+          builder: (context) => PaymentMethodPage(
+            restaurantId: restaurantId,
+            restaurantName: restaurantName,
+            specificItems: items,
+          ),
         ),
-      ),
-    );
+      );
+    } else {
+      // ✅ 2+ restaurantes: navega para página coordenadora
+      navigator.push(
+        MaterialPageRoute(
+          builder: (context) => MultiOrderCoordinatorPage(
+            itemsByRestaurant: itemsByRestaurant,
+          ),
+        ),
+      );
+    }
   }
 }
 

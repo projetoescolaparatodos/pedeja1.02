@@ -165,7 +165,7 @@ class ProductCard extends StatelessWidget {
                     ),
                   ),
 
-                  // BADGE DE PREÇO (circular no canto inferior esquerdo)
+                  // BADGE DE PREÇO
                   Padding(
                     padding: const EdgeInsets.only(top: 8),
                     child: Container(
@@ -194,11 +194,10 @@ class ProductCard extends StatelessWidget {
                     ),
                   ),
                   
-                  // Badge de múltiplas marcas
+                  // Badge de múltiplas marcas (CORRIGIDO: removido Positioned)
                   if (product.hasMultipleBrands && product.brands.isNotEmpty)
-                    Positioned(
-                      top: 8,
-                      left: 8,
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6),
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(

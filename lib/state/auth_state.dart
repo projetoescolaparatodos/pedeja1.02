@@ -38,53 +38,30 @@ class AuthState extends ChangeNotifier {
 
   /// 🔄 Inicializar autenticação
   Future<void> _initAuth() async {
-    debugPrint('🔧 [AuthState] _initAuth() chamado - Iniciando auto-login manual');
+    debugPrint('🔧 [AuthState] _initAuth() chamado - APENAS verificando Firebase, SEM auto-login');
     
     _isLoading = true;
     notifyListeners();
 
     try {
-      // 1️⃣ Tentar carregar credenciais salvas manualmente
-      final hasCredentials = await _authService.loadSavedCredentials();
+      // 🚫 DESABILITADO: Não fazer auto-login automático
+      // Apenas verificar se há usuário no Firebase (persistência nativa do Firebase)
+      final currentUser = FirebaseAuth.instance.currentUser;
       
-      if (hasCredentials) {
-        debugPrint('✅ [AuthState] Credenciais manuais encontradas');
+      if (currentUser != null) {
+        debugPrint('✅ [AuthState] Usuário Firebase encontrado: ${currentUser.email}');
+        _currentUser = currentUser;
         
-        // Tentar obter usuário atual do Firebase (pode ser null se não persistiu)
-        // Se for null, mas temos token, podemos tentar "re-autenticar" ou apenas usar o token para API
-        // Por enquanto, vamos confiar no Firebase se ele estiver lá, ou usar o estado manual
-        
-        final currentUser = FirebaseAuth.instance.currentUser;
-        if (currentUser != null) {
-          _currentUser = currentUser;
-          debugPrint('✅ [AuthState] Usuário Firebase também encontrado: ${currentUser.email}');
-        } else {
-          debugPrint('⚠️ [AuthState] Usuário Firebase é NULL, mas temos credenciais salvas');
-          // Aqui poderíamos tentar um signInWithCustomToken se tivéssemos salvo, 
-          // ou apenas confiar que o token JWT está válido para chamadas de API.
-          // Para UI, precisamos de um objeto User ou simular um.
-          // Como _currentUser é User?, não podemos instanciar User diretamente facilmente.
-          // Vamos manter _currentUser como null mas isAuthenticated como true se mudarmos a lógica do getter.
-          // Mas o getter isAuthenticated depende de _currentUser != null.
-          
-          // SOLUÇÃO: Se temos credenciais mas Firebase está deslogado, 
-          // o ideal seria tentar re-autenticar silenciosamente ou forçar login.
-          // Mas como o problema é persistência, vamos assumir que o usuário ESTÁ logado
-          // e tentar carregar os dados dele via API usando o token salvo.
-        }
-
-        // Carregar dados do usuário da API
-        await _loadUserData();
-        
-        // Se conseguimos carregar dados, consideramos logado
-        if (_userData != null) {
-             debugPrint('✅ [AuthState] Dados do usuário carregados via API/Cache');
-             
-             // Se _currentUser for null, isso é um problema para widgets que dependem dele.
-             // Mas para a lógica de "estar logado", o que importa é ter acesso.
+        // Carregar JWT e dados apenas se Firebase já tem sessão ativa
+        final hasCredentials = await _authService.loadSavedCredentials();
+        if (hasCredentials) {
+          await _loadUserData();
+          debugPrint('✅ [AuthState] Dados do usuário carregados');
         }
       } else {
-        debugPrint('❌ [AuthState] Nenhuma credencial manual encontrada');
+        debugPrint('❌ [AuthState] Nenhum usuário no Firebase - usuário deslogado');
+        // Garantir que não há credenciais salvas
+        await _authService.clearCredentials();
       }
       
     } catch (e) {
@@ -94,15 +71,17 @@ class AuthState extends ChangeNotifier {
       notifyListeners();
     }
     
-    // Manter listener do Firebase apenas para sincronizar se algo mudar externamente
+    // Listener do Firebase para mudanças de autenticação
     FirebaseAuth.instance.authStateChanges().listen((User? user) {
       debugPrint('🔔 [AuthState] authStateChanges: ${user?.email}');
       if (user != null) {
         _currentUser = user;
-        // Salvar credenciais novamente para garantir
-        if (user.email != null && _authService.jwtToken != null) {
-             _authService.saveCredentials(user.email!, _authService.jwtToken!);
-        }
+        notifyListeners();
+      } else {
+        // Se Firebase deslogou, limpar tudo
+        _currentUser = null;
+        _userData = null;
+        _restaurantData = null;
         notifyListeners();
       }
     });
@@ -397,6 +376,8 @@ class AuthState extends ChangeNotifier {
     notifyListeners();
 
     try {
+      debugPrint('🚪 [AuthState] Iniciando logout completo...');
+      
       // 🔔 Limpar token FCM antes do logout
       await NotificationService.clearToken();
       
@@ -407,7 +388,10 @@ class AuthState extends ChangeNotifier {
       // 🛑 Desconectar Pusher
       await OrderStatusPusherService.disconnect();
 
-      // 🚪 Logout do Firebase + Limpar credenciais
+      // 🗑️ Limpar estado de login do SharedPreferences
+      await _clearLoginState();
+      
+      // 🚪 Logout do Firebase + Limpar credenciais (AuthService faz limpeza pesada)
       await _authService.signOut();
       
       // 🗑️ Limpar TODOS os estados locais
@@ -418,32 +402,61 @@ class AuthState extends ChangeNotifier {
       _error = null;
       _isGuest = false;
       
-      // 🍎 iOS: Aguardar para garantir limpeza
+      // 🍎 iOS: Verificação final e limpeza extra
       if (Platform.isIOS) {
-        await Future.delayed(Duration(milliseconds: 300));
+        debugPrint('🍎 [AuthState] iOS - verificação final de logout...');
+        await Future.delayed(Duration(milliseconds: 500));
         
         // Verificar se Firebase realmente deslogou
         final stillLoggedIn = FirebaseAuth.instance.currentUser;
         if (stillLoggedIn != null) {
-          debugPrint('⚠️ [AuthState] iOS ainda tem usuário! UID: ${stillLoggedIn.uid}');
+          debugPrint('❌ [AuthState] CRÍTICO: iOS ainda tem usuário! UID: ${stillLoggedIn.uid}');
           
-          // Forçar signOut novamente
-          await FirebaseAuth.instance.signOut();
-          await Future.delayed(Duration(milliseconds: 200));
+          // Forçar signOut múltiplas vezes
+          for (int i = 0; i < 3; i++) {
+            await FirebaseAuth.instance.signOut();
+            await Future.delayed(Duration(milliseconds: 200));
+            
+            if (FirebaseAuth.instance.currentUser == null) {
+              debugPrint('✅ [AuthState] iOS logout bem-sucedido na tentativa ${i + 1}');
+              break;
+            }
+          }
+          
+          // Se ainda estiver logado, tentar limpar SharedPreferences novamente
+          if (FirebaseAuth.instance.currentUser != null) {
+            debugPrint('❌ [AuthState] FALHA CRÍTICA: Limpando SharedPreferences manualmente...');
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.clear(); // LIMPA TUDO (último recurso)
+          }
+        } else {
+          debugPrint('✅ [AuthState] iOS logout confirmado');
         }
       }
       
       _isLoading = false;
       notifyListeners();
       
-      debugPrint('👋 [AuthState] Logout completo');
+      debugPrint('✅ [AuthState] Logout completo e verificado');
     } catch (e) {
       debugPrint('❌ [AuthState] Erro no logout: $e');
       
       // Mesmo com erro, limpar tudo
       _currentUser = null;
       _userData = null;
+      _restaurantData = null;
+      _registrationComplete = false;
+      _error = null;
+      _isGuest = false;
       _isLoading = false;
+      
+      // Tentar limpar SharedPreferences mesmo com erro
+      try {
+        await _clearLoginState();
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.clear();
+      } catch (_) {}
+      
       notifyListeners();
     }
   }

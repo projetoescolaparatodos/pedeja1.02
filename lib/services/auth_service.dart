@@ -73,26 +73,42 @@ class AuthService {
     try {
       final prefs = await SharedPreferences.getInstance();
       
+      debugPrint('🗑️ [AuthService] Iniciando limpeza COMPLETA de credenciais...');
+      
       // 🗑️ Remover TODAS as chaves relacionadas à autenticação
       await prefs.remove('isLoggedIn');
       await prefs.remove('userEmail');
       await prefs.remove('jwtToken');
       
-      // 🍎 iOS: Limpar TUDO do SharedPreferences
+      // 🍎 iOS: LIMPEZA AGRESSIVA - Remover TODAS as chaves suspeitas
       if (Platform.isIOS) {
+        debugPrint('🍎 [AuthService] iOS detectado - limpeza agressiva');
         final keys = prefs.getKeys();
+        int removedCount = 0;
+        
         for (String key in keys) {
-          if (key.startsWith('flutter.') || 
-              key.contains('auth') || 
-              key.contains('user') ||
-              key.contains('token')) {
+          // Remover qualquer chave que possa armazenar dados de auth
+          if (key.toLowerCase().contains('login') ||
+              key.toLowerCase().contains('auth') || 
+              key.toLowerCase().contains('user') ||
+              key.toLowerCase().contains('token') ||
+              key.toLowerCase().contains('jwt') ||
+              key.toLowerCase().contains('email') ||
+              key.toLowerCase().contains('password') ||
+              key.toLowerCase().contains('credential')) {
             await prefs.remove(key);
-            debugPrint('🗑️ Removendo chave iOS: $key');
+            removedCount++;
+            debugPrint('🗑️ [iOS] Removida chave: $key');
           }
         }
+        
+        debugPrint('🍎 [iOS] Total de chaves removidas: $removedCount');
+        
+        // Aguardar para garantir que a limpeza foi persistida
+        await Future.delayed(Duration(milliseconds: 300));
       }
       
-      debugPrint('🗑️ [AuthService] Credenciais limpas completamente');
+      debugPrint('✅ [AuthService] Credenciais limpas completamente');
     } catch (e) {
       debugPrint('❌ [AuthService] Erro ao limpar credenciais: $e');
     }
@@ -465,44 +481,75 @@ class AuthService {
   /// 🚪 6. Logout
   Future<void> signOut() async {
     try {
-      // 🔥 FORÇAR LOGOUT DO FIREBASE (iOS + Android)
-      await _auth.signOut();
+      debugPrint('🚪 [AuthService] Iniciando processo de logout...');
       
-      // 🗑️ Limpar credenciais manuais
-      await clearCredentials();
-      
-      // 🗑️ Limpar dados em memória
+      // 🗑️ 1. Limpar dados em memória PRIMEIRO
       _jwtToken = null;
       _userData = null;
       _restaurantData = null;
       
-      // 🍎 iOS FIX: Força limpeza do Keychain
-      // Desconectar completamente do Firebase
+      // 🗑️ 2. Limpar credenciais do SharedPreferences
+      await clearCredentials();
+      
+      // 🔥 3. FORÇAR LOGOUT DO FIREBASE
+      await _auth.signOut();
+      debugPrint('✅ [AuthService] Firebase signOut chamado');
+      
+      // 🍎 iOS FIX: LIMPEZA AGRESSIVA E MÚLTIPLAS TENTATIVAS
       if (Platform.isIOS) {
-        debugPrint('🍎 [AuthService] Limpando Keychain do iOS...');
+        debugPrint('🍎 [AuthService] iOS detectado - iniciando limpeza agressiva...');
         
         // Aguardar para garantir que o signOut completou
         await Future.delayed(Duration(milliseconds: 500));
         
-        // Verificar se realmente deslogou
-        final currentUser = _auth.currentUser;
-        if (currentUser != null) {
-          debugPrint('⚠️ [AuthService] Usuário ainda logado! Forçando...');
+        // Verificar se realmente deslogou e tentar até 3 vezes
+        int attempts = 0;
+        const maxAttempts = 3;
+        
+        while (attempts < maxAttempts) {
+          final currentUser = _auth.currentUser;
           
-          // Tentar deletar token manualmente
-          try {
-            await currentUser.getIdToken(true); // Force refresh
-            await _auth.signOut(); // Tentar novamente
-          } catch (e) {
-            debugPrint('🔧 [AuthService] Erro ao forçar logout: $e');
+          if (currentUser == null) {
+            debugPrint('✅ [iOS] Logout confirmado (tentativa ${attempts + 1})');
+            break;
           }
+          
+          attempts++;
+          debugPrint('⚠️ [iOS] Usuário ainda logado! Tentativa $attempts/$maxAttempts');
+          debugPrint('⚠️ [iOS] UID ainda presente: ${currentUser.uid}');
+          
+          // Forçar signOut novamente
+          await _auth.signOut();
+          await Future.delayed(Duration(milliseconds: 300));
+          
+          // Limpar credenciais novamente
+          await clearCredentials();
+        }
+        
+        // Verificação final
+        final finalUser = _auth.currentUser;
+        if (finalUser != null) {
+          debugPrint('❌ [iOS] FALHA: Usuário AINDA logado após $maxAttempts tentativas!');
+          debugPrint('❌ [iOS] UID: ${finalUser.uid}, Email: ${finalUser.email}');
+          
+          // Última tentativa desesperada: deletar o usuário (não recomendado mas funciona)
+          // await finalUser.delete(); // ⚠️ PERIGOSO - apenas em último caso
+        } else {
+          debugPrint('✅ [iOS] Logout CONFIRMADO - usuário completamente deslogado');
         }
       }
       
-      debugPrint('👋 [AuthService] Logout realizado');
+      debugPrint('👋 [AuthService] Logout completo');
     } catch (e) {
       debugPrint('❌ [AuthService] Erro ao fazer logout: $e');
-      rethrow; // Re-throw para o AuthState tratar
+      
+      // Mesmo com erro, garantir limpeza
+      _jwtToken = null;
+      _userData = null;
+      _restaurantData = null;
+      await clearCredentials();
+      
+      rethrow;
     }
   }
 

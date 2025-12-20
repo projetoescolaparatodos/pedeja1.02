@@ -19,8 +19,6 @@ class _SignupPageState extends State<SignupPage> {
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   final _birthDateController = TextEditingController();
-  DateTime? _birthDate;
-  bool _isAdult = false;
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
   bool _acceptTerms = false;
@@ -36,36 +34,26 @@ class _SignupPageState extends State<SignupPage> {
     super.dispose();
   }
 
-  bool _calculateIsAdult(DateTime birth) {
-    final today = DateTime.now();
-    var age = today.year - birth.year;
-    if (today.month < birth.month || (today.month == birth.month && today.day < birth.day)) {
-      age -= 1;
-    }
-    return age >= 16;
-  }
-
-  Future<void> _pickBirthDate() async {
-    final initial = DateTime.now().subtract(const Duration(days: 365 * 16));
-    final first = DateTime(1900);
-    final last = DateTime.now();
-
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _birthDate ?? initial,
-      firstDate: first,
-      lastDate: last,
-      helpText: 'Selecione sua data de nascimento',
-      confirmText: 'OK',
-      cancelText: 'Cancelar',
-    );
-
-    if (picked != null) {
-      setState(() {
-        _birthDate = picked;
-        _birthDateController.text = '${picked.day.toString().padLeft(2, '0')}/${picked.month.toString().padLeft(2, '0')}/${picked.year}';
-        _isAdult = _calculateIsAdult(picked);
-      });
+  bool _validateAge(String dateStr) {
+    try {
+      final parts = dateStr.split('/');
+      if (parts.length != 3) return false;
+      
+      final day = int.parse(parts[0]);
+      final month = int.parse(parts[1]);
+      final year = int.parse(parts[2]);
+      
+      final birthDate = DateTime(year, month, day);
+      final today = DateTime.now();
+      
+      var age = today.year - birthDate.year;
+      if (today.month < birthDate.month || (today.month == birthDate.month && today.day < birthDate.day)) {
+        age -= 1;
+      }
+      
+      return age >= 16;
+    } catch (e) {
+      return false;
     }
   }
 
@@ -76,16 +64,6 @@ class _SignupPageState extends State<SignupPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Você precisa aceitar os termos de uso'),
-          backgroundColor: Color(0xFF74241F),
-        ),
-      );
-      return;
-    }
-
-    if (!_isAdult) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Você precisa ter 16 anos ou mais para criar uma conta'),
           backgroundColor: Color(0xFF74241F),
         ),
       );
@@ -218,15 +196,17 @@ class _SignupPageState extends State<SignupPage> {
 
                 const SizedBox(height: 16),
 
-                // Birth date field (idade)
+                // Birth date field (digitação manual)
                 TextFormField(
                   controller: _birthDateController,
-                  readOnly: true,
+                  keyboardType: TextInputType.datetime,
                   style: const TextStyle(color: Colors.white),
                   decoration: InputDecoration(
-                    labelText: 'Data de nascimento',
+                    labelText: 'Data de nascimento (DD/MM/AAAA)',
                     labelStyle: const TextStyle(color: Colors.white70),
                     prefixIcon: const Icon(Icons.cake_outlined, color: Color(0xFFE39110)),
+                    hintText: '01/01/2000',
+                    hintStyle: const TextStyle(color: Colors.white38),
                     filled: true,
                     fillColor: const Color(0xFF022E28),
                     border: OutlineInputBorder(
@@ -241,31 +221,45 @@ class _SignupPageState extends State<SignupPage> {
                       borderRadius: BorderRadius.circular(12),
                       borderSide: const BorderSide(color: Color(0xFFE39110), width: 2),
                     ),
-                    suffixIcon: IconButton(
-                      icon: const Icon(Icons.calendar_today, color: Color(0xFFE39110)),
-                      onPressed: _pickBirthDate,
-                    ),
                   ),
-                  onTap: _pickBirthDate,
                   validator: (value) {
-                    if (_birthDate == null) {
-                      return 'Selecione sua data de nascimento';
+                    if (value == null || value.isEmpty) {
+                      return 'Digite sua data de nascimento';
                     }
-                    if (!_isAdult) {
+                    
+                    // Validar formato DD/MM/AAAA
+                    final regex = RegExp(r'^\d{2}/\d{2}/\d{4}$');
+                    if (!regex.hasMatch(value)) {
+                      return 'Formato inválido. Use DD/MM/AAAA';
+                    }
+                    
+                    // Validar se a data é válida
+                    try {
+                      final parts = value.split('/');
+                      final day = int.parse(parts[0]);
+                      final month = int.parse(parts[1]);
+                      final year = int.parse(parts[2]);
+                      
+                      if (day < 1 || day > 31) return 'Dia inválido';
+                      if (month < 1 || month > 12) return 'Mês inválido';
+                      if (year < 1900 || year > DateTime.now().year) return 'Ano inválido';
+                      
+                      final birthDate = DateTime(year, month, day);
+                      if (birthDate.isAfter(DateTime.now())) {
+                        return 'Data não pode ser no futuro';
+                      }
+                    } catch (e) {
+                      return 'Data inválida';
+                    }
+                    
+                    // Validar idade mínima
+                    if (!_validateAge(value)) {
                       return 'Você precisa ter 16 anos ou mais';
                     }
+                    
                     return null;
                   },
                 ),
-
-                if (_birthDate != null && !_isAdult)
-                  const Padding(
-                    padding: EdgeInsets.only(top: 8.0),
-                    child: Text(
-                      'Você precisa ter 16 anos ou mais para criar uma conta.',
-                      style: TextStyle(color: Colors.redAccent, fontSize: 13),
-                    ),
-                  ),
 
                 const SizedBox(height: 16),
 

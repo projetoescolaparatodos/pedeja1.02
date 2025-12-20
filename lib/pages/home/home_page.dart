@@ -60,6 +60,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     'pet shop',
     'saúde',
     'saude',
+    'perfumaria',
+    'varejinho',
   ];
 
   @override
@@ -650,11 +652,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       builder: (context, catalog, child) {
         // FILTRA APENAS PRODUTOS DE COMIDA (exclui farmácia/mercado)
         final foodProducts = catalog.randomProducts.where((product) {
-          final category = product.category?.toLowerCase() ?? '';
+          final category = (product.category ?? '').toLowerCase().trim();
           
           // Retorna TRUE se NÃO for farmácia/mercado
           return !_pharmacyMarketCategories.any((pharmaCategory) => 
-            category.contains(pharmaCategory)
+            category == pharmaCategory || category.contains(pharmaCategory)
           );
         }).toList();
 
@@ -806,11 +808,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       builder: (context, catalog, child) {
         // FILTRA APENAS PRODUTOS DE FARMÁCIA/MERCADO
         final pharmacyProducts = catalog.randomProducts.where((product) {
-          final category = product.category?.toLowerCase() ?? '';
+          final category = (product.category ?? '').toLowerCase().trim();
           
           // Retorna TRUE se FOR farmácia/mercado
           return _pharmacyMarketCategories.any((pharmaCategory) => 
-            category.contains(pharmaCategory)
+            category == pharmaCategory || category.contains(pharmaCategory)
           );
         }).toList();
 

@@ -1,6 +1,5 @@
 
 import 'package:flutter/material.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import '../../models/product_model.dart';
 import '../../pages/product/product_detail_page.dart';
 
@@ -41,43 +40,44 @@ class ProductCard extends StatelessWidget {
             // IMAGEM DE FUNDO
             Positioned.fill(
               child: product.displayImage?.isNotEmpty == true
-                  ? CachedNetworkImage(
-                      imageUrl: product.displayImage!,
+                  ? Image.network(
+                      product.displayImage!,
                       fit: BoxFit.cover,
-                      
-                      // Enquanto carrega
-                      placeholder: (_, __) => Container(
-                        color: const Color(0xFF022E28),
-                        child: const Center(
-                          child: CircularProgressIndicator(
-                            color: Color(0xFFE39110),
-                            strokeWidth: 2,
+                      loadingBuilder: (context, child, loadingProgress) {
+                        if (loadingProgress == null) return child;
+                        return Container(
+                          color: const Color(0xFF022E28),
+                          child: const Center(
+                            child: CircularProgressIndicator(
+                              color: Color(0xFFE39110),
+                              strokeWidth: 2,
+                            ),
                           ),
-                        ),
-                      ),
-                      
-                      // Se der erro ao carregar
-                      errorWidget: (_, url, error) => Container(
-                        color: const Color(0xFF022E28),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: const [
-                            Icon(
-                              Icons.image_not_supported,
-                              color: Colors.white24,
-                              size: 48,
-                            ),
-                            SizedBox(height: 4),
-                            Text(
-                              'Imagem indisponível',
-                              style: TextStyle(
-                                fontSize: 10,
-                                color: Colors.white38,
+                        );
+                      },
+                      errorBuilder: (context, error, stackTrace) {
+                        return Container(
+                          color: const Color(0xFF022E28),
+                          child: const Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.image_not_supported,
+                                color: Colors.white24,
+                                size: 48,
                               ),
-                            ),
-                          ],
-                        ),
-                      ),
+                              SizedBox(height: 4),
+                              Text(
+                                'Imagem indisponível',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: Colors.white38,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
                     )
                   : Container(
                       color: const Color(0xFF022E28),

@@ -1,41 +1,1955 @@
 # 📱 PedeJá - Documentação Completa do Projeto
 
+> **Última Atualização**: 22 de Dezembro de 2025  
+> **Versão Atual**: 1.0.15+16  
+> **Status**: Em Produção
+
 ## 📋 Índice
 1. [Visão Geral](#visão-geral)
-2. [Histórico de Desenvolvimento](#histórico-de-desenvolvimento)
-3. [Arquitetura do Sistema](#arquitetura-do-sistema)
-4. [Funcionalidades Implementadas](#funcionalidades-implementadas)
-5. [Estrutura de Código](#estrutura-de-código)
-6. [Guia de Uso](#guia-de-uso)
-7. [Próximos Passos](#próximos-passos)
+2. [Arquitetura do Sistema](#arquitetura-do-sistema)
+3. [Funcionalidades Principais](#funcionalidades-principais)
+4. [Implementações Recentes](#implementações-recentes)
+5. [Backend API](#backend-api)
+6. [Firebase & Autenticação](#firebase--autenticação)
+7. [Estrutura de Código](#estrutura-de-código)
+8. [Guia de Desenvolvimento](#guia-de-desenvolvimento)
+9. [Troubleshooting](#troubleshooting)
 
 ---
 
 ## 🎯 Visão Geral
 
-**PedeJá** é um aplicativo de delivery de comida desenvolvido em Flutter, permitindo que usuários:
-- Naveguem por restaurantes e produtos
-- Adicionem itens ao carrinho com personalização (adicionais)
-- Completem seu cadastro antes de finalizar pedidos
-- Realizem autenticação (login/cadastro)
+**PedeJá** é um aplicativo completo de delivery desenvolvido em Flutter, oferecendo uma experiência moderna e fluida para pedidos de comida, farmácia e mercado.
 
-### 🛠️ Tecnologias Utilizadas
-- **Framework**: Flutter (Web + Mobile)
-- **Linguagem**: Dart
-- **Gerenciamento de Estado**: Provider
-- **API Backend**: https://api-pedeja.vercel.app
-- **Plataformas**: Android, Web (Chrome)
+### ✨ Principais Recursos
+- 🍔 **Delivery de Comida**: Navegue por restaurantes e produtos
+- 💊 **Farmácia**: Medicamentos, suplementos e vitaminas
+- 🛒 **Mercado**: Perfumaria, higiene, pet shop e mais
+- 📹 **Promoções em Vídeo**: Carrossel promocional com vídeos e imagens
+- 🔐 **Autenticação Firebase**: Login seguro com JWT
+- 🛍️ **Carrinho Inteligente**: Detecção de duplicatas e personalização
+- 💳 **Pagamento**: Cartão, PIX e dinheiro
+- 📍 **Geolocalização**: Cálculo automático de entrega
 
-### 🎨 Paleta de Cores
-- **Verde Escuro**: `#022E28` - Background principal
-- **Vinho**: `#74241F` - Botões primários
-- **Vinho Escuro**: `#5A1C18` - Hover states
-- **Dourado**: `#E39110` - Destaques e CTAs
-- **Verde Musgo**: `#0D3B3B` - Componentes secundários
+### 🛠️ Stack Tecnológica
+- **Frontend**: Flutter 3.x (Dart SDK >=3.0.0)
+- **State Management**: Provider Pattern
+- **Backend**: Node.js/Vercel (https://api-pedeja.vercel.app)
+- **Database**: Firebase (Auth, Firestore, Storage)
+- **Cache**: CachedNetworkImage + VideoCacheManager
+- **Notificações**: Firebase Cloud Messaging
+- **Plataformas**: Android, iOS, Web
+
+### 🎨 Design System
+**Paleta de Cores**:
+- `#022E28` - Verde Escuro (Background principal)
+- `#033D35` - Verde Médio (Cards e componentes)
+- `#0D3B3B` - Verde Musgo (Scaffold background)
+- `#74241F` - Vinho (Botões primários e badges)
+- `#5A1C18` - Vinho Escuro (Hover states)
+- `#E39110` - Dourado (CTAs e destaques)
+
+**Typography**: Google Fonts (Poppins, Roboto)
+
+**Componentes**:
+- Material Design 3
+- Custom widgets reutilizáveis
+- Animações fluidas (Hero, PageView)
+- Bottom sheets e modals
+
+---
+
+## 🏗️ Arquitetura do Sistema
+
+### Padrão de Arquitetura
+**Clean Architecture** com separação de responsabilidades:
+
+```
+lib/
+├── core/           # Núcleo da aplicação
+│   ├── cache/      # Cache de vídeos e imagens
+│   ├── services/   # Serviços compartilhados
+│   └── theme/      # Tema e estilos
+├── models/         # Modelos de dados
+├── pages/          # Telas da aplicação
+├── providers/      # Estado global (Provider)
+├── services/       # Serviços de API
+├── state/          # Gerenciamento de estado
+└── widgets/        # Componentes reutilizáveis
+```
+
+### State Management (Provider Pattern)
+
+**1. CatalogProvider** (`lib/providers/catalog_provider.dart` - 403 linhas)
+```dart
+class CatalogProvider with ChangeNotifier {
+  // 🍔 Produtos em Destaque (Comida)
+  List<ProductModel> _featuredProducts = [];
+  bool _featuredProductsLoading = false;
+  String? _featuredProductsError;
+  
+  // 💊 Produtos de Farmácia
+  List<ProductModel> _pharmacyProducts = [];
+  bool _pharmacyProductsLoading = false;
+  String? _pharmacyProductsError;
+  
+  // 🛒 Produtos de Mercado
+  List<ProductModel> _marketProducts = [];
+  bool _marketProductsLoading = false;
+  String? _marketProductsError;
+  
+  // 🏪 Restaurantes
+  List<RestaurantModel> _restaurants = [];
+  
+  // Métodos de carregamento
+  Future<void> loadFeaturedProducts({bool force = false});
+  Future<void> loadPharmacyProducts({bool force = false});
+  Future<void> loadMarketProducts({bool force = false});
+  Future<void> loadRestaurants();
+  
+  // Auto-refresh a cada 5 minutos
+  Timer? _refreshTimer;
+}
+```
+
+**2. CartState** (`lib/state/cart_state.dart`)
+```dart
+class CartState with ChangeNotifier {
+  List<CartItem> _items = [];
+  
+  void addItem(CartItem item);        // Detecta duplicatas
+  void updateItemQuantity(String id, int quantity);
+  void removeItem(String id);
+  void clear();
+  
+  int get itemCount;
+  double get total;
+  String? get currentRestaurantId;    // Validação de restaurante único
+}
+```
+
+**3. AuthState** (`lib/state/auth_state.dart` - 490 linhas)
+```dart
+class AuthState with ChangeNotifier {
+  User? _firebaseUser;
+  Map<String, dynamic>? _userData;
+  String? _jwtToken;
+  bool _isLoading = true;
+  
+  // Autenticação
+  Future<void> signIn(String email, String password);
+  Future<void> signUp(Map<String, dynamic> userData);
+  Future<void> signOut();               // iOS: 3 tentativas + fallback
+  
+  // Validações
+  bool get isAuthenticated;
+  bool get isProfileComplete;
+  bool get needsAddressCompletion;
+}
+```
+
+**4. UserState** (`lib/state/user_state.dart`)
+```dart
+class UserState with ChangeNotifier {
+  Map<String, dynamic>? userData;
+  
+  bool get isProfileComplete;
+  void updateProfile(Map<String, dynamic> data);
+  void updateAddress(Map<String, dynamic> address);
+}
+```
+
+### Fluxo de Dados
+
+```
+┌─────────────┐
+│   UI Layer  │
+│  (Widgets)  │
+└──────┬──────┘
+       │ Consumer<Provider>
+       ▼
+┌─────────────┐
+│  Providers  │
+│  (State)    │
+└──────┬──────┘
+       │ HTTP/Firebase
+       ▼
+┌─────────────┐
+│  Services   │
+│  (API/Auth) │
+└──────┬──────┘
+       │
+       ▼
+┌─────────────┐
+│   Backend   │
+│  Vercel/FB  │
+└─────────────┘
+```
+
+---
+
+## ⚡ Funcionalidades Principais
+
+### 1. Home Page - 3 Seções de Produtos
+
+**Arquivo**: `lib/pages/home/home_page.dart` (1965 linhas)
+
+#### Estrutura Visual
+```
+┌────────────────────────────────────┐
+│  Header (Logo + Busca + Carrinho)  │
+├────────────────────────────────────┤
+│   Carrossel Promocional (Vídeos)   │
+├────────────────────────────────────┤
+│   🔍 Barra de Busca                │
+├────────────────────────────────────┤
+│   🏪 Restaurantes Parceiros         │
+├────────────────────────────────────┤
+│   🍔 Produtos em Destaque (50)     │ ← API: featured
+├────────────────────────────────────┤
+│   💊 Farmácia (40)                 │ ← API: pharmacy
+├────────────────────────────────────┤
+│   🛒 Mercado (40)                  │ ← API: market
+└────────────────────────────────────┘
+```
+
+#### Carrossel Promocional
+- **Fonte**: Firestore (`promotions` collection)
+- **Tipos**: Imagens + Vídeos
+- **Cache**: VideoCacheManager para pré-carregamento
+- **Autoplay**: 45 segundos por slide
+- **Lifecycle**: Pausa automática em background
+
+```dart
+// lib/widgets/home/promotional_carousel_item.dart
+class PromotionalCarouselItem extends StatefulWidget {
+  final PromotionModel promotion;
+  final bool isActive;              // Controla reprodução
+  final VoidCallback onVideoEnd;    // Avança slide ao terminar
+}
+```
+
+#### 3 Seções Independentes
+
+**Produtos em Destaque** (Comida/Restaurantes)
+```dart
+Future<void> loadFeaturedProducts() async {
+  final url = 'https://api-pedeja.vercel.app/api/products/all'
+    '?limit=50'
+    '&perRestaurant=10'
+    '&excludeCategories=remedio,suplementos,perfumaria,higiene...'
+    '&shuffle=true'
+    '&seed=featured';
+}
+```
+
+**Farmácia** (Remédios/Suplementos)
+```dart
+Future<void> loadPharmacyProducts() async {
+  final url = 'https://api-pedeja.vercel.app/api/products/all'
+    '?limit=40'
+    '&perRestaurant=40'
+    '&categories=remedio,suplementos,medicamento,vitamina'
+    '&shuffle=true'
+    '&seed=pharmacy';
+}
+```
+
+**Mercado** (Perfumaria/Higiene/Pet)
+```dart
+Future<void> loadMarketProducts() async {
+  final url = 'https://api-pedeja.vercel.app/api/products/all'
+    '?limit=40'
+    '&perRestaurant=40'
+    '&categories=perfumaria,varejinho,higiene,beleza,cosmeticos...'
+    '&shuffle=true'
+    '&seed=market';
+}
+```
+
+**Benefícios**:
+- ✅ 130 produtos visíveis (antes: 50)
+- ✅ Distribuição justa (`perRestaurant` limit)
+- ✅ Loading states independentes
+- ✅ Server-side filtering (performance)
+
+#### Carrossel de Produtos (Padrão Reutilizável)
+```dart
+Widget _buildProductCarousel(List products, CatalogProvider catalog) {
+  const int productsPerPage = 6;  // 2 colunas x 3 linhas
+  
+  return PageView.builder(
+    itemCount: (products.length / productsPerPage).ceil(),
+    itemBuilder: (context, pageIndex) {
+      return GridView.builder(
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          childAspectRatio: 0.75,
+        ),
+        // 6 produtos por página
+      );
+    },
+  );
+}
+```
+
+### 2. Autenticação & Perfil
+
+**Firebase Authentication**
+- Login com email/senha
+- Cadastro com validação
+- Reset de senha
+- Persistência de sessão
+- **iOS Fix**: Logout com 3 tentativas + fallback
+
+**Fluxo de Cadastro**:
+```
+┌──────────────┐
+│  SignupPage  │
+│              │
+│ 1. Nome      │
+│ 2. Email     │
+│ 3. Telefone  │
+│ 4. CPF       │
+│ 5. Senha     │
+│ 6. Data Nasc │ ← Campo de texto (DD/MM/AAAA)
+│              │
+│ ✓ Validação  │
+│ ✓ Firebase   │
+│ ✓ Backend    │
+└──────┬───────┘
+       │
+       ▼
+┌──────────────┐
+│   HomePage   │
+└──────────────┘
+```
+
+**Data de Nascimento** (Implementação Manual):
+```dart
+// lib/pages/auth/signup_page.dart
+TextFormField(
+  controller: _birthDateController,
+  decoration: InputDecoration(
+    labelText: 'Data de Nascimento',
+    hintText: '01/01/2000',
+  ),
+  validator: (value) {
+    if (!RegExp(r'^\d{2}/\d{2}/\d{4}$').hasMatch(value!)) {
+      return 'Use o formato DD/MM/AAAA';
+    }
+    // Validação de idade (16+)
+    final age = _calculateAge(value);
+    if (age < 16) {
+      return 'Você precisa ter pelo menos 16 anos';
+    }
+    return null;
+  },
+)
+```
+
+### 3. Carrinho de Compras
+
+**Arquivo**: `lib/pages/cart/cart_page.dart` (978 linhas)
+
+**Design**: DraggableScrollableSheet (Modal bottom sheet)
+
+**Recursos**:
+- ✅ Detecção inteligente de duplicatas (produto + addons)
+- ✅ Controles de quantidade (+/-)
+- ✅ Cálculo automático de totais
+- ✅ Validação de restaurante único
+- ✅ Cache de imagens (200x200 disk)
+- ✅ Animações de remoção
+
+```dart
+class CartItem {
+  final String id;
+  final String name;
+  final double price;
+  final String imageUrl;
+  int quantity;
+  final List<Addon> addons;
+  final String restaurantId;
+  
+  double get totalPrice => (price + addonsTotal) * quantity;
+}
+```
+
+### 4. Detalhes do Produto
+
+**Arquivo**: `lib/pages/product/product_detail_page.dart` (825 linhas)
+
+**Layout**: SliverAppBar com imagem hero
+
+**Seções**:
+1. **Header**: Imagem em cache (1000x1000)
+2. **Info**: Nome, descrição, categoria, badges
+3. **Addons**: Checkboxes multi-seleção
+4. **Restaurante**: Nome, status (aberto/fechado)
+5. **Preço**: Cálculo dinâmico com addons
+6. **Ação**: Botão "Adicionar ao Carrinho"
+
+**Badges Dinâmicos**:
+```dart
+// lib/widgets/common/product_card.dart
+if (product.badges != null && product.badges!.isNotEmpty)
+  Padding(
+    padding: const EdgeInsets.only(top: 8),
+    child: Wrap(
+      spacing: 4,
+      children: product.badges!.map((badge) {
+        return Container(
+          padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          decoration: BoxDecoration(
+            color: Color(0xFF74241F),
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: Text(
+            badge.toString().replaceAll('_', ' '),
+            style: TextStyle(fontSize: 10, color: Colors.white),
+          ),
+        );
+      }).toList(),
+    ),
+  )
+```
+
+### 5. Cache de Imagens (Performance Critical)
+
+**Pacote**: `cached_network_image: ^3.4.1`
+
+**Implementação Global**:
+```dart
+// ProductCard
+CachedNetworkImage(
+  imageUrl: product.imageUrl,
+  maxWidthDiskCache: 800,
+  maxHeightDiskCache: 800,
+  memCacheWidth: 400,
+  memCacheHeight: 400,
+  placeholder: (context, url) => CircularProgressIndicator(),
+  errorWidget: (context, url, error) => Icon(Icons.error),
+)
+
+// CartPage
+CachedNetworkImage(
+  imageUrl: item.imageUrl,
+  maxWidthDiskCache: 200,
+  maxHeightDiskCache: 200,
+)
+
+// ProductDetailPage (Hero)
+CachedNetworkImage(
+  imageUrl: product.imageUrl,
+  maxWidthDiskCache: 1000,
+  maxHeightDiskCache: 1000,
+)
+```
+
+**Benefícios**:
+- ✅ Carregamento rápido em APK release
+- ✅ Redução de uso de dados
+- ✅ Melhor experiência offline
+- ✅ Retry automático em falhas
+
+---
+
+## 🔄 Implementações Recentes (Dez 2025)
+
+### ✅ 1. Logout iOS (v1.0.14+15)
+
+**Problema**: No iOS, mesmo após clicar em "Sair", o app mantinha login ao reabrir.
+
+**Solução Implementada**:
+
+**AuthState** (`lib/state/auth_state.dart`):
+```dart
+Future<void> signOut() async {
+  try {
+    debugPrint('🚪 [AuthState] Iniciando logout...');
+    
+    // iOS: 3 tentativas agressivas
+    if (Platform.isIOS) {
+      for (int i = 0; i < 3; i++) {
+        await _clearLoginState();
+        await _authService.signOut();
+        await Future.delayed(Duration(milliseconds: 500));
+      }
+      
+      // Fallback: limpa TUDO
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.clear();
+    } else {
+      await _clearLoginState();
+      await _authService.signOut();
+    }
+    
+    _firebaseUser = null;
+    _userData = null;
+    _jwtToken = null;
+    _isLoading = false;
+    notifyListeners();
+    
+  } catch (e) {
+    debugPrint('❌ [AuthState] Erro no logout: $e');
+  }
+}
+
+Future<void> _clearLoginState() async {
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.remove('saved_email');
+  await prefs.remove('saved_password');
+  // ... remove todos os tokens
+}
+```
+
+**AuthService** (`lib/services/auth_service.dart`):
+```dart
+Future<void> clearCredentials() async {
+  final prefs = await SharedPreferences.getInstance();
+  final allKeys = prefs.getKeys();
+  
+  // Remove TODOS os padrões de chave relacionados
+  for (final key in allKeys) {
+    if (key.contains('login') || 
+        key.contains('auth') || 
+        key.contains('user') ||
+        key.contains('token') ||
+        key.contains('jwt') ||
+        key.contains('email') ||
+        key.contains('password') ||
+        key.contains('credential')) {
+      await prefs.remove(key);
+    }
+  }
+}
+```
+
+**Resultados**:
+- ✅ iOS logout funciona 100%
+- ✅ Sem auto-login indesejado
+- ✅ Mantém compatibilidade Android
+
+### ✅ 2. 3 Seções de Produtos (v1.0.15+16)
+
+**Data**: 22/12/2025  
+**Motivação**: Melhorar distribuição de produtos e UX
+
+**Mudanças Arquiteturais**:
+
+**ANTES**:
+```
+HomePage
+  └─ 2 Seções:
+      ├─ Produtos em Destaque (50 produtos)
+      └─ Farmácia & Mercado (filtro client-side)
+```
+
+**DEPOIS**:
+```
+HomePage
+  └─ 3 Seções Independentes:
+      ├─ 🍔 Produtos em Destaque (50) - API endpoint 1
+      ├─ 💊 Farmácia (40)            - API endpoint 2
+      └─ 🛒 Mercado (40)             - API endpoint 3
+```
+
+**CatalogProvider** - Novos Estados:
+```dart
+// 3 listas independentes
+List<ProductModel> _featuredProducts = [];
+List<ProductModel> _pharmacyProducts = [];
+List<ProductModel> _marketProducts = [];
+
+// Estados de loading independentes
+bool _featuredProductsLoading = false;
+bool _pharmacyProductsLoading = false;
+bool _marketProductsLoading = false;
+
+// Getters públicos
+List<ProductModel> get featuredProducts => _featuredProducts;
+List<ProductModel> get pharmacyProducts => _pharmacyProducts;
+List<ProductModel> get marketProducts => _marketProducts;
+
+// Compatibilidade
+@Deprecated('Use featuredProducts, pharmacyProducts ou marketProducts')
+List<ProductModel> get randomProducts => [
+  ..._featuredProducts,
+  ..._pharmacyProducts,
+  ..._marketProducts,
+];
+```
+
+**HomePage** - Novos Widgets:
+```dart
+// lib/pages/home/home_page.dart
+
+Widget _buildProdutosEmDestaque() {
+  return Consumer<CatalogProvider>(
+    builder: (context, catalog, child) {
+      final products = catalog.featuredProducts;
+      
+      if (catalog.featuredProductsLoading) return Loading();
+      if (catalog.featuredProductsError != null) return Error();
+      
+      return Column(
+        children: [
+          Row(
+            children: [
+              Icon(Icons.restaurant, color: Color(0xFFE39110)),
+              SizedBox(width: 8),
+              Text('Produtos em Destaque'),
+            ],
+          ),
+          _buildProductCarousel(products, catalog),
+        ],
+      );
+    },
+  );
+}
+
+Widget _buildFarmacia() {
+  // Mesmo padrão, ícone: Icons.local_pharmacy
+  // Usa catalog.pharmacyProducts
+}
+
+Widget _buildMercado() {
+  // Mesmo padrão, ícone: Icons.shopping_cart
+  // Usa catalog.marketProducts
+}
+```
+
+**Benefícios**:
+- ✅ **130 produtos** visíveis (50+40+40) vs 50 antes
+- ✅ **Distribuição justa**: `perRestaurant` evita dominação
+- ✅ **Performance**: Server-side filtering
+- ✅ **UX**: Separação clara de categorias
+- ✅ **Escalabilidade**: Fácil adicionar novas seções
+
+### ✅ 3. Cache de Imagens (v1.0.13+14)
+
+**Problema**: Em APK release, imagens não carregavam (gray placeholders).
+
+**Solução**: Substituir `Image.network` por `CachedNetworkImage` em TODOS os arquivos.
+
+**Arquivos Modificados**:
+- `lib/widgets/common/product_card.dart` (259 linhas)
+- `lib/pages/cart/cart_page.dart` (978 linhas)
+- `lib/pages/product/product_detail_page.dart` (825 linhas)
+
+**Configuração Otimizada**:
+```dart
+// ProductCard (thumbnails)
+maxWidthDiskCache: 800,
+maxHeightDiskCache: 800,
+memCacheWidth: 400,
+memCacheHeight: 400,
+
+// CartPage (itens pequenos)
+maxWidthDiskCache: 200,
+maxHeightDiskCache: 200,
+
+// ProductDetail (hero image)
+maxWidthDiskCache: 1000,
+maxHeightDiskCache: 1000,
+```
+
+### ✅ 4. Data de Nascimento Manual (v1.0.14+15)
+
+**Problema**: DatePicker nativo era confuso no mobile.
+
+**Solução**: Campo de texto com validação regex.
+
+**Implementação**:
+```dart
+// lib/pages/auth/signup_page.dart
+
+TextFormField(
+  controller: _birthDateController,
+  decoration: InputDecoration(
+    labelText: 'Data de Nascimento',
+    hintText: '01/01/2000',
+    helperText: 'Formato: DD/MM/AAAA',
+  ),
+  keyboardType: TextInputType.datetime,
+  validator: (value) {
+    if (value == null || value.isEmpty) {
+      return 'Campo obrigatório';
+    }
+    
+    // Regex DD/MM/AAAA
+    if (!RegExp(r'^\d{2}/\d{2}/\d{4}$').hasMatch(value)) {
+      return 'Use o formato DD/MM/AAAA (ex: 01/01/2000)';
+    }
+    
+    // Validação de idade mínima (16 anos)
+    try {
+      final parts = value.split('/');
+      final day = int.parse(parts[0]);
+      final month = int.parse(parts[1]);
+      final year = int.parse(parts[2]);
+      
+      final birthDate = DateTime(year, month, day);
+      final today = DateTime.now();
+      final age = today.year - birthDate.year;
+      
+      if (today.month < birthDate.month || 
+          (today.month == birthDate.month && today.day < birthDate.day)) {
+        age--;
+      }
+      
+      if (age < 16) {
+        return 'Você precisa ter pelo menos 16 anos';
+      }
+    } catch (e) {
+      return 'Data inválida';
+    }
+    
+    return null;
+  },
+)
+```
+
+---
+
+## 🌐 Backend API
+
+**URL Base**: `https://api-pedeja.vercel.app`
+
+### Endpoints Principais
+
+#### 1. Produtos
+
+**GET /api/products/all**
+
+Query Parameters:
+```typescript
+{
+  limit?: number;           // Limite de produtos (padrão: 50)
+  perRestaurant?: number;   // Limite por restaurante (distribuição justa)
+  categories?: string;      // "remedio,suplementos" (inclusão)
+  excludeCategories?: string; // "remedio,perfumaria" (exclusão)
+  shuffle?: boolean;        // Randomização (padrão: false)
+  seed?: string;           // Seed para shuffle consistente
+  page?: number;           // Paginação (futuro)
+}
+```
+
+Resposta:
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "product_123",
+      "name": "Pizza Margherita",
+      "description": "Tradicional italiana",
+      "price": 45.90,
+      "imageUrl": "https://...",
+      "category": "pizza",
+      "badges": ["destaque", "mais_vendido"],
+      "available": true,
+      "preparationTime": 30,
+      "restaurant": {
+        "id": "rest_456",
+        "name": "Pizzaria do João",
+        "isOpen": true
+      },
+      "addons": [
+        {
+          "id": "addon_789",
+          "name": "Borda Catupiry",
+          "price": 8.00
+        }
+      ]
+    }
+  ],
+  "count": 50,
+  "metadata": {
+    "totalAvailable": 1250,
+    "restaurantsIncluded": 5
+  }
+}
+```
+
+**Exemplo de Uso (3 Seções)**:
+```dart
+// Produtos em Destaque (Comida)
+final featuredUrl = '/api/products/all'
+  '?limit=50'
+  '&perRestaurant=10'
+  '&excludeCategories=remedio,suplementos,perfumaria,varejinho,higiene'
+  '&shuffle=true'
+  '&seed=featured';
+
+// Farmácia
+final pharmacyUrl = '/api/products/all'
+  '?limit=40'
+  '&perRestaurant=40'
+  '&categories=remedio,suplementos,medicamento,vitamina'
+  '&shuffle=true'
+  '&seed=pharmacy';
+
+// Mercado
+final marketUrl = '/api/products/all'
+  '?limit=40'
+  '&perRestaurant=40'
+  '&categories=perfumaria,varejinho,higiene,beleza,cosmeticos,limpeza,pet'
+  '&shuffle=true'
+  '&seed=market';
+```
+
+**GET /api/products/:id**
+- Retorna detalhes completos de um produto específico
+
+#### 2. Restaurantes
+
+**GET /api/restaurants**
+
+Resposta:
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": "rest_123",
+      "name": "Pizzaria do João",
+      "description": "As melhores pizzas da cidade",
+      "imageUrl": "https://...",
+      "category": "italiana",
+      "rating": 4.8,
+      "deliveryTime": "30-40 min",
+      "deliveryFee": 5.00,
+      "minimumOrder": 20.00,
+      "isOpen": true,
+      "operatingHours": {
+        "monday": { "open": "18:00", "close": "23:00" },
+        "tuesday": { "open": "18:00", "close": "23:00" }
+      },
+      "address": {
+        "street": "Rua das Flores",
+        "number": "123",
+        "city": "São Paulo",
+        "state": "SP"
+      }
+    }
+  ]
+}
+```
+
+#### 3. Autenticação
+
+**POST /api/auth/firebase-token**
+
+Request:
+```json
+{
+  "firebaseToken": "eyJhbGciOiJSUzI1..."
+}
+```
+
+Resposta:
+```json
+{
+  "success": true,
+  "token": "jwt_token_here",
+  "user": {
+    "id": "user_123",
+    "name": "João Silva",
+    "email": "joao@example.com",
+    "phone": "(11) 98765-4321",
+    "cpf": "123.456.789-00",
+    "profileComplete": true
+  }
+}
+```
+
+**POST /api/auth/signup**
+
+Request:
+```json
+{
+  "name": "Maria Santos",
+  "email": "maria@example.com",
+  "password": "senha123",
+  "phone": "(11) 91234-5678",
+  "cpf": "987.654.321-00",
+  "birthDate": "15/03/1990",
+  "address": {
+    "zipCode": "01310-100",
+    "street": "Av. Paulista",
+    "number": "1000",
+    "complement": "Apto 101",
+    "neighborhood": "Bela Vista",
+    "city": "São Paulo",
+    "state": "SP"
+  }
+}
+```
+
+#### 4. Pedidos
+
+**POST /api/orders/create**
+
+Request:
+```json
+{
+  "items": [
+    {
+      "productId": "product_123",
+      "quantity": 2,
+      "addons": ["addon_789"]
+    }
+  ],
+  "restaurantId": "rest_456",
+  "deliveryAddress": {
+    "zipCode": "01310-100",
+    "street": "Av. Paulista",
+    "number": "1000"
+  },
+  "paymentMethod": "credit_card",
+  "total": 99.80
+}
+```
+
+**GET /api/orders/:id**
+- Retorna detalhes de um pedido específico
+
+**GET /api/orders/user/:userId**
+- Lista todos os pedidos de um usuário
+
+### Error Handling
+
+Padrão de resposta de erro:
+```json
+{
+  "success": false,
+  "error": {
+    "code": "INVALID_TOKEN",
+    "message": "Token de autenticação inválido",
+    "details": {}
+  }
+}
+```
+
+Códigos de erro comuns:
+- `INVALID_TOKEN`: Token JWT inválido ou expirado
+- `PRODUCT_NOT_FOUND`: Produto não encontrado
+- `RESTAURANT_CLOSED`: Restaurante fechado
+- `MINIMUM_ORDER_NOT_MET`: Valor mínimo não atingido
+- `INVALID_ADDRESS`: Endereço de entrega inválido
+
+### Rate Limiting
+- **Limite**: 100 requisições/minuto por IP
+- **Header de resposta**: `X-RateLimit-Remaining`
+
+---
+
+## 🔥 Firebase Integration
+
+### Configuração
+
+**Android**: `android/app/google-services.json`  
+**iOS**: `ios/Runner/GoogleService-Info.plist`  
+**Web**: `lib/firebase_options.dart` (FlutterFire CLI)
+
+### Serviços Utilizados
+
+#### 1. Firebase Authentication
+```dart
+// lib/services/auth_service.dart
+
+class AuthService {
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  
+  // Login
+  Future<User?> signInWithEmailPassword(String email, String password) async {
+    final credential = await _auth.signInWithEmailAndPassword(
+      email: email,
+      password: password,
+    );
+    return credential.user;
+  }
+  
+  // Cadastro
+  Future<User?> signUpWithEmailPassword(String email, String password) async {
+    final credential = await _auth.createUserWithEmailAndPassword(
+      email: email,
+      password: password,
+    );
+    return credential.user;
+  }
+  
+  // Obter token JWT para backend
+  Future<String?> getIdToken() async {
+    final user = _auth.currentUser;
+    return await user?.getIdToken();
+  }
+  
+  // Logout (iOS: 3 tentativas)
+  Future<void> signOut() async {
+    if (Platform.isIOS) {
+      for (int i = 0; i < 3; i++) {
+        await _auth.signOut();
+        await Future.delayed(Duration(milliseconds: 500));
+      }
+    } else {
+      await _auth.signOut();
+    }
+  }
+}
+```
+
+#### 2. Cloud Firestore
+
+**Collections**:
+
+**promotions**:
+```json
+{
+  "id": "promo_123",
+  "title": "Super Desconto!",
+  "description": "50% OFF em pizzas",
+  "type": "video",
+  "videoUrl": "https://firebasestorage.googleapis.com/...",
+  "imageUrl": "https://...",
+  "active": true,
+  "order": 1,
+  "startDate": "2025-12-01T00:00:00Z",
+  "endDate": "2025-12-31T23:59:59Z"
+}
+```
+
+**users** (opcional):
+```json
+{
+  "id": "user_123",
+  "name": "João Silva",
+  "email": "joao@example.com",
+  "favorites": ["product_456", "product_789"],
+  "lastOrder": "2025-12-20T14:30:00Z"
+}
+```
+
+**Service**:
+```dart
+// lib/services/firestore_service.dart
+
+class FirestoreService {
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  
+  // Buscar promoções ativas
+  Future<List<PromotionModel>> getActivePromotions() async {
+    final now = Timestamp.now();
+    
+    final snapshot = await _firestore
+        .collection('promotions')
+        .where('active', isEqualTo: true)
+        .where('startDate', isLessThanOrEqualTo: now)
+        .where('endDate', isGreaterThanOrEqualTo: now)
+        .orderBy('order')
+        .get();
+    
+    return snapshot.docs
+        .map((doc) => PromotionModel.fromFirestore(doc))
+        .toList();
+  }
+}
+```
+
+#### 3. Firebase Storage
+
+Usado para hospedar vídeos promocionais:
+```
+gs://pedeja-app.appspot.com/
+  └── promotions/
+      ├── video1.mp4
+      ├── video2.mp4
+      └── thumbnail_video1.jpg
+```
+
+**Download com Cache**:
+```dart
+// lib/core/cache/video_cache_manager.dart
+
+class VideoCacheManager {
+  static Future<File?> getCachedVideo(String videoUrl) async {
+    final cacheKey = _getCacheKey(videoUrl);
+    final cacheFile = await DefaultCacheManager().getSingleFile(videoUrl);
+    return cacheFile;
+  }
+  
+  static Future<void> preloadVideo(String videoUrl) async {
+    await DefaultCacheManager().downloadFile(videoUrl);
+  }
+}
+```
+
+#### 4. Firebase Cloud Messaging (FCM)
+
+**Notificações Push**:
+- Pedido confirmado
+- Pedido saiu para entrega
+- Pedido entregue
+- Promoções especiais
+
+```dart
+// lib/services/notification_service.dart
+
+class NotificationService {
+  final FirebaseMessaging _messaging = FirebaseMessaging.instance;
+  
+  Future<void> initialize() async {
+    // Solicitar permissão (iOS)
+    await _messaging.requestPermission();
+    
+    // Obter token FCM
+    final token = await _messaging.getToken();
+    debugPrint('🔔 FCM Token: $token');
+    
+    // Handler de mensagens em foreground
+    FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      _showLocalNotification(message);
+    });
+    
+    // Handler de mensagens em background
+    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+  }
+}
+```
+
+---
+
+## 🎨 Design System
+
+### Paleta de Cores
+
+```dart
+// lib/core/theme/app_theme.dart
+
+class AppColors {
+  // Primárias
+  static const primary = Color(0xFFE39110);        // Laranja principal
+  static const primaryDark = Color(0xFFD87F00);    // Laranja escuro
+  static const primaryLight = Color(0xFFFFA726);   // Laranja claro
+  
+  // Secundárias
+  static const secondary = Color(0xFF74241F);      // Vermelho escuro
+  static const secondaryLight = Color(0xFF8B2E27); // Vermelho médio
+  
+  // Neutras
+  static const background = Color(0xFFFAFAFA);     // Cinza muito claro
+  static const surface = Colors.white;
+  static const textPrimary = Color(0xFF212121);    // Preto suave
+  static const textSecondary = Color(0xFF757575);  // Cinza médio
+  
+  // Estados
+  static const success = Color(0xFF4CAF50);        // Verde
+  static const error = Color(0xFFE53935);          // Vermelho
+  static const warning = Color(0xFFFF9800);        // Laranja
+  static const info = Color(0xFF2196F3);           // Azul
+  
+  // Overlay
+  static const overlay = Color(0x80000000);        // Preto 50%
+}
+```
+
+### Tipografia
+
+```dart
+class AppTextStyles {
+  // Headings
+  static const h1 = TextStyle(
+    fontSize: 32,
+    fontWeight: FontWeight.bold,
+    color: AppColors.textPrimary,
+  );
+  
+  static const h2 = TextStyle(
+    fontSize: 24,
+    fontWeight: FontWeight.bold,
+    color: AppColors.textPrimary,
+  );
+  
+  static const h3 = TextStyle(
+    fontSize: 20,
+    fontWeight: FontWeight.w600,
+    color: AppColors.textPrimary,
+  );
+  
+  // Body
+  static const body1 = TextStyle(
+    fontSize: 16,
+    fontWeight: FontWeight.normal,
+    color: AppColors.textPrimary,
+  );
+  
+  static const body2 = TextStyle(
+    fontSize: 14,
+    fontWeight: FontWeight.normal,
+    color: AppColors.textSecondary,
+  );
+  
+  // Botões
+  static const button = TextStyle(
+    fontSize: 16,
+    fontWeight: FontWeight.w600,
+    color: Colors.white,
+  );
+}
+```
+
+### Espaçamentos
+
+```dart
+class AppSpacing {
+  static const xs = 4.0;
+  static const sm = 8.0;
+  static const md = 16.0;
+  static const lg = 24.0;
+  static const xl = 32.0;
+  static const xxl = 48.0;
+}
+```
+
+### Componentes Customizados
+
+#### AppButton
+```dart
+// lib/widgets/common/app_button.dart
+
+class AppButton extends StatelessWidget {
+  final String text;
+  final VoidCallback onPressed;
+  final bool isLoading;
+  final Color? color;
+  
+  @override
+  Widget build(BuildContext context) {
+    return ElevatedButton(
+      onPressed: isLoading ? null : onPressed,
+      style: ElevatedButton.styleFrom(
+        backgroundColor: color ?? AppColors.primary,
+        padding: EdgeInsets.symmetric(vertical: 16, horizontal: 32),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+      ),
+      child: isLoading
+          ? SizedBox(
+              height: 20,
+              width: 20,
+              child: CircularProgressIndicator(color: Colors.white),
+            )
+          : Text(text, style: AppTextStyles.button),
+    );
+  }
+}
+```
+
+#### ProductCard
+```dart
+// lib/widgets/common/product_card.dart (259 linhas)
+
+class ProductCard extends StatelessWidget {
+  final ProductModel product;
+  final VoidCallback onTap;
+  
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Card(
+        elevation: 2,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Imagem com cache
+            ClipRRect(
+              borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
+              child: Hero(
+                tag: 'product_${product.id}',
+                child: CachedNetworkImage(
+                  imageUrl: product.imageUrl,
+                  height: 150,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                  maxWidthDiskCache: 800,
+                  maxHeightDiskCache: 800,
+                  memCacheWidth: 400,
+                  memCacheHeight: 400,
+                ),
+              ),
+            ),
+            
+            // Conteúdo
+            Padding(
+              padding: EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(product.name, style: AppTextStyles.h3),
+                  SizedBox(height: 4),
+                  Text(
+                    product.description,
+                    style: AppTextStyles.body2,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  SizedBox(height: 8),
+                  
+                  // Badges
+                  if (product.badges != null && product.badges!.isNotEmpty)
+                    Wrap(
+                      spacing: 4,
+                      children: product.badges!.map((badge) {
+                        return Container(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.secondary,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            badge.toString().replaceAll('_', ' '),
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: Colors.white,
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  
+                  SizedBox(height: 8),
+                  
+                  // Preço
+                  Text(
+                    'R\$ ${product.price.toStringAsFixed(2)}',
+                    style: AppTextStyles.h2.copyWith(
+                      color: AppColors.primary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+```
+
+---
+
+## 🧪 Testes & Qualidade
+
+### Análise Estática
+
+**Arquivo**: `analysis_options.yaml`
+
+```yaml
+include: package:flutter_lints/flutter.yaml
+
+linter:
+  rules:
+    - prefer_const_constructors
+    - prefer_const_literals_to_create_immutables
+    - avoid_print
+    - prefer_single_quotes
+    - sort_pub_dependencies
+```
+
+### Comandos Úteis
+
+```bash
+# Análise de código
+flutter analyze
+
+# Formatar código
+flutter format .
+
+# Rodar testes
+flutter test
+
+# Build APK (release)
+flutter build apk --release
+
+# Build AAB (Play Store)
+flutter build appbundle --release
+
+# Rodar em dispositivo
+flutter run --release
+
+# Limpar build
+flutter clean
+```
+
+---
+
+## 📱 Plataformas Suportadas
+
+### Android
+- **Min SDK**: 21 (Android 5.0 Lollipop)
+- **Target SDK**: 34 (Android 14)
+- **Compile SDK**: 34
+- **Build Tool**: Gradle 8.3
+- **Kotlin**: 1.9.22
+- **Firebase**: Configurado via `google-services.json`
+
+### iOS
+- **Deployment Target**: 13.0
+- **Xcode**: 15.0+
+- **Swift**: 5.9
+- **CocoaPods**: 1.15.0
+- **Firebase**: Configurado via `GoogleService-Info.plist`
+
+**Permissões iOS** (`Info.plist`):
+```xml
+<key>NSCameraUsageDescription</key>
+<string>Permitir acesso à câmera para fotos de perfil</string>
+
+<key>NSPhotoLibraryUsageDescription</key>
+<string>Permitir acesso à galeria para selecionar fotos</string>
+
+<key>NSLocationWhenInUseUsageDescription</key>
+<string>Permitir acesso à localização para calcular entrega</string>
+```
+
+### Web
+- **Suporte**: Experimental
+- **Firebase Hosting**: Configurado
+- **URL**: Pendente
+
+---
+
+## 🚀 Deploy & CI/CD
+
+### Codemagic (iOS/Android)
+
+**Arquivo**: `codemagic.yaml`
+
+```yaml
+workflows:
+  pedeja-production:
+    name: Pedeja Production Build
+    instance_type: mac_mini_m2
+    
+    environment:
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+      
+      vars:
+        FIREBASE_PROJECT_ID: "pedeja-app"
+        
+      groups:
+        - app_store_credentials
+        - google_play_credentials
+        - firebase_credentials
+    
+    scripts:
+      - name: Get Flutter packages
+        script: flutter pub get
+      
+      - name: Build Android
+        script: flutter build appbundle --release
+      
+      - name: Build iOS
+        script: |
+          flutter build ios --release --no-codesign
+          xcodebuild -workspace ios/Runner.xcworkspace \
+            -scheme Runner \
+            -configuration Release \
+            -archivePath build/ios/Runner.xcarchive \
+            archive
+    
+    artifacts:
+      - build/**/outputs/**/*.aab
+      - build/**/outputs/**/*.apk
+      - build/ios/Runner.xcarchive
+    
+    publishing:
+      google_play:
+        credentials: $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
+        track: internal
+      
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+```
+
+### Builds Locais
+
+**Android APK**:
+```bash
+flutter build apk --release --split-per-abi
+# Gera: build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
+#       build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+#       build/app/outputs/flutter-apk/app-x86_64-release.apk
+```
+
+**Android AAB** (Play Store):
+```bash
+flutter build appbundle --release
+# Gera: build/app/outputs/bundle/release/app-release.aab
+```
+
+**iOS IPA**:
+```bash
+flutter build ios --release
+cd ios
+xcodebuild -workspace Runner.xcworkspace \
+  -scheme Runner \
+  -configuration Release \
+  -archivePath build/Runner.xcarchive \
+  archive
+
+xcodebuild -exportArchive \
+  -archivePath build/Runner.xcarchive \
+  -exportPath build \
+  -exportOptionsPlist ExportOptions.plist
+```
 
 ---
 
 ## 📖 Histórico de Desenvolvimento
+
+### Versões Recentes
+
+#### v1.0.15+16 (22/12/2025)
+**Principais Mudanças**:
+- ✅ **3 Seções de Produtos**: Featured (50), Farmácia (40), Mercado (40)
+- ✅ **API Otimizada**: Server-side filtering com `perRestaurant` limit
+- ✅ **UX Melhorada**: Navegação clara entre categorias
+- ✅ **Performance**: 130 produtos vs 50 antes
+
+**Arquivos Modificados**:
+- `lib/providers/catalog_provider.dart` (403 linhas)
+- `lib/pages/home/home_page.dart` (1965 linhas)
+- `pubspec.yaml` (versão bumped)
+
+**Documentação**: Ver `CHANGELOG_3_SECOES.md`
+
+#### v1.0.14+15 (20-21/12/2025)
+**Principais Mudanças**:
+- ✅ **iOS Logout Fix**: 3 tentativas + fallback com `prefs.clear()`
+- ✅ **Data Manual**: Campo de texto com validação regex (DD/MM/AAAA)
+- ✅ **Validação de Idade**: Mínimo 16 anos
+
+**Arquivos Modificados**:
+- `lib/state/auth_state.dart` (490 linhas)
+- `lib/services/auth_service.dart`
+- `lib/pages/auth/signup_page.dart`
+
+#### v1.0.13+14 (20/12/2025)
+**Principais Mudanças**:
+- ✅ **Cache de Imagens**: `CachedNetworkImage` em todos os arquivos
+- ✅ **Performance APK**: Imagens carregam corretamente em release
+
+**Arquivos Modificados**:
+- `lib/widgets/common/product_card.dart` (259 linhas)
+- `lib/pages/cart/cart_page.dart` (978 linhas)
+- `lib/pages/product/product_detail_page.dart` (825 linhas)
+- `pubspec.yaml` (+ `cached_network_image: ^3.4.1`)
+
+**Configuração Otimizada**:
+- ProductCard: 800x800 disk, 400x400 mem
+- CartPage: 200x200 disk
+- ProductDetail: 1000x1000 disk (hero)
+
+### Fases de Desenvolvimento Anteriores
+
+#### Fase 1: Setup Inicial
+- Criação do projeto Flutter
+- Configuração de dependências básicas
+- Estrutura de pastas
+
+#### Fase 2: Modelos de Dados
+- ProductModel
+- RestaurantModel
+- CartItem
+- PromotionModel
+
+#### Fase 3: Autenticação Firebase
+- Setup Firebase (Android/iOS/Web)
+- AuthService com email/senha
+- AuthState Provider
+- Telas de login/cadastro
+
+#### Fase 4: Catálogo de Produtos
+- CatalogProvider
+- Integração com API backend
+- ProductCard component
+- ProductDetailPage
+
+#### Fase 5: Carrinho de Compras
+- CartState Provider
+- CartPage (DraggableScrollableSheet)
+- Detecção de duplicatas
+- Controles de quantidade
+
+#### Fase 6: Home Page
+- Carrossel promocional (Firestore)
+- Restaurantes parceiros
+- Seções de produtos
+- Busca e filtros
+
+#### Fase 7: Pagamentos
+- Integração Mercado Pago
+- Cartão de crédito
+- PIX
+- Dinheiro (troco)
+
+#### Fase 8: Pedidos
+- Criação de pedidos
+- Acompanhamento em tempo real
+- Histórico de pedidos
+
+#### Fase 9: Otimizações
+- Cache de imagens
+- Cache de vídeos
+- Pré-carregamento
+- Lazy loading
+
+---
+
+## 🔧 Troubleshooting
+
+### Problema: Imagens não carregam em APK release
+
+**Sintoma**: Placeholders cinzas, imagens não aparecem.
+
+**Causa**: `Image.network` tem problemas com cache em release builds.
+
+**Solução**:
+```dart
+// ANTES (não funciona em release)
+Image.network(product.imageUrl)
+
+// DEPOIS (funciona perfeitamente)
+CachedNetworkImage(
+  imageUrl: product.imageUrl,
+  maxWidthDiskCache: 800,
+  maxHeightDiskCache: 800,
+  placeholder: (context, url) => CircularProgressIndicator(),
+  errorWidget: (context, url, error) => Icon(Icons.error),
+)
+```
+
+**Arquivos a modificar**:
+- Todos os `Image.network` devem ser substituídos
+- Adicionar `cached_network_image` no `pubspec.yaml`
+
+---
+
+### Problema: iOS não faz logout corretamente
+
+**Sintoma**: Após logout, app reabre logado automaticamente.
+
+**Causa**: SharedPreferences no iOS persiste de forma agressiva.
+
+**Solução**:
+```dart
+// lib/state/auth_state.dart
+
+Future<void> signOut() async {
+  if (Platform.isIOS) {
+    // 3 tentativas com delay
+    for (int i = 0; i < 3; i++) {
+      await _clearLoginState();
+      await _authService.signOut();
+      await Future.delayed(Duration(milliseconds: 500));
+    }
+    
+    // Fallback nuclear: limpa TUDO
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.clear();
+  } else {
+    await _clearLoginState();
+    await _authService.signOut();
+  }
+}
+```
+
+**Importante**:
+- iOS precisa de múltiplas tentativas
+- `prefs.clear()` é o último recurso
+- Android funciona normalmente com 1 tentativa
+
+---
+
+### Problema: Produtos limitados a 50
+
+**Sintoma**: HomePage mostra apenas 50 produtos, poucos restaurantes visíveis.
+
+**Causa**: Endpoint antigo com limite fixo de 50.
+
+**Solução**: Implementar 3 seções independentes com endpoints especializados.
+
+**ANTES**:
+```dart
+// 1 endpoint, 50 produtos total
+GET /api/products/all?limit=50
+```
+
+**DEPOIS**:
+```dart
+// 3 endpoints, 130 produtos total
+GET /api/products/all?limit=50&excludeCategories=...  // Featured
+GET /api/products/all?limit=40&categories=remedio...  // Pharmacy
+GET /api/products/all?limit=40&categories=perfumaria... // Market
+```
+
+**Benefícios**:
+- 130 produtos vs 50 (+160%)
+- Distribuição justa (`perRestaurant` limit)
+- Categorias bem separadas
+- Loading states independentes
+
+**Ver**: `CHANGELOG_3_SECOES.md` para detalhes completos
+
+---
+
+### Problema: DatePicker confuso no mobile
+
+**Sintoma**: Usuários não conseguem selecionar data de nascimento.
+
+**Causa**: DatePicker nativo do Flutter é complexo em mobile.
+
+**Solução**: Substituir por campo de texto com validação.
+
+```dart
+// lib/pages/auth/signup_page.dart
+
+TextFormField(
+  controller: _birthDateController,
+  decoration: InputDecoration(
+    labelText: 'Data de Nascimento',
+    hintText: '01/01/2000',
+    helperText: 'Formato: DD/MM/AAAA',
+  ),
+  keyboardType: TextInputType.datetime,
+  validator: (value) {
+    // Regex DD/MM/AAAA
+    if (!RegExp(r'^\d{2}/\d{2}/\d{4}$').hasMatch(value!)) {
+      return 'Use o formato DD/MM/AAAA';
+    }
+    
+    // Validação de idade (16+)
+    final age = _calculateAge(value);
+    if (age < 16) {
+      return 'Você precisa ter pelo menos 16 anos';
+    }
+    
+    return null;
+  },
+)
+```
+
+**Vantagens**:
+- UX mais simples
+- Validação em tempo real
+- Compatível com teclado numérico
+
+---
+
+### Problema: Vídeos promocionais travando
+
+**Sintoma**: App congela ao carregar vídeos do Firebase Storage.
+
+**Causa**: Download síncrono de vídeos grandes.
+
+**Solução**: Implementar VideoCacheManager com pré-carregamento.
+
+```dart
+// lib/core/cache/video_cache_manager.dart
+
+class VideoCacheManager {
+  static Future<void> preloadAllVideos(List<String> videoUrls) async {
+    await Future.wait(
+      videoUrls.map((url) => DefaultCacheManager().downloadFile(url)),
+    );
+  }
+  
+  static Future<File?> getCachedVideo(String videoUrl) async {
+    return await DefaultCacheManager().getSingleFile(videoUrl);
+  }
+}
+
+// Uso no HomePage
+@override
+void initState() {
+  super.initState();
+  
+  // Pré-carregar vídeos em background
+  _loadPromotions().then((promos) {
+    final videoUrls = promos
+        .where((p) => p.type == 'video')
+        .map((p) => p.videoUrl!)
+        .toList();
+    VideoCacheManager.preloadAllVideos(videoUrls);
+  });
+}
+```
+
+**Resultado**:
+- Vídeos carregam instantaneamente
+- Sem travamentos
+- Experiência fluida
+
+---
+
+### Problema: Build iOS falha no Xcode
+
+**Sintoma**: Erro de signing/provisioning profile.
+
+**Causa**: Certificados não configurados.
+
+**Solução**:
+
+1. **Gerar certificados**:
+```bash
+# No diretório do projeto
+cd ios
+
+# Gerar chave privada
+openssl genrsa -out ios_distribution_private_key 2048
+
+# Gerar CSR
+openssl req -new -key ios_distribution_private_key \
+  -out ios_distribution.certSigningRequest
+```
+
+2. **Apple Developer Center**:
+   - Upload do CSR
+   - Download do certificado (.cer)
+   - Criar App ID: `com.pedeja.app`
+   - Criar Provisioning Profile
+
+3. **Xcode**:
+   - Abrir `Runner.xcworkspace`
+   - Signing & Capabilities → Team
+   - Selecionar provisioning profile
+
+4. **Codemagic**:
+   - Upload de certificados em Settings → Code signing
+   - Configurar `codemagic.yaml`
+
+**Ver**: `CODEMAGIC_IOS_SETUP.md` para guia completo
+
+---
+
+### Problema: Firebase não inicializa
+
+**Sintoma**: App crasha ao iniciar com erro Firebase.
+
+**Causa**: Arquivos de configuração ausentes ou incorretos.
+
+**Solução Android**:
+```bash
+# Verificar se existe
+ls -la android/app/google-services.json
+
+# Se não existir, baixar do Firebase Console:
+# 1. Firebase Console → Project Settings
+# 2. Add Android app (se ainda não adicionou)
+# 3. Package name: com.pedeja.app
+# 4. Download google-services.json
+# 5. Copiar para android/app/
+```
+
+**Solução iOS**:
+```bash
+# Verificar se existe
+ls -la ios/Runner/GoogleService-Info.plist
+
+# Se não existir, baixar do Firebase Console:
+# 1. Firebase Console → Project Settings
+# 2. Add iOS app (se ainda não adicionou)
+# 3. Bundle ID: com.pedeja.app
+# 4. Download GoogleService-Info.plist
+# 5. Copiar para ios/Runner/
+# 6. No Xcode, adicionar ao projeto (drag & drop)
+```
+
+**Verificar dependências** (`pubspec.yaml`):
+```yaml
+dependencies:
+  firebase_core: ^3.8.1
+  firebase_auth: ^5.3.3
+  cloud_firestore: ^5.5.2
+  firebase_storage: ^12.3.7
+  firebase_messaging: ^15.1.5
+```
+
+**Ver**: `FIREBASE_CONFIG_INSTRUCTIONS.md` para guia completo
+
+---
+
+## 📚 Referências & Links Úteis
+
+### Documentação Oficial
+- [Flutter](https://flutter.dev/docs)
+- [Dart](https://dart.dev/guides)
+- [Firebase Flutter](https://firebase.flutter.dev)
+- [Provider](https://pub.dev/packages/provider)
+
+### Backend & API
+- **Base URL**: https://api-pedeja.vercel.app
+- **Repositório Backend**: (privado)
+- **Documentação API**: (em desenvolvimento)
+
+### Pacotes Principais
+- `provider: ^6.1.2` - State management
+- `firebase_core: ^3.8.1` - Firebase core
+- `firebase_auth: ^5.3.3` - Autenticação
+- `cloud_firestore: ^5.5.2` - Database NoSQL
+- `cached_network_image: ^3.4.1` - Cache de imagens
+- `flutter_cache_manager: ^3.4.1` - Cache de vídeos
+- `video_player: ^2.9.2` - Player de vídeos
+- `geolocator: ^13.0.2` - Geolocalização
+- `geocoding: ^3.0.0` - Geocoding (endereços)
+
+### Ferramentas de Desenvolvimento
+- **VS Code**: Editor principal
+- **Android Studio**: Emuladores Android
+- **Xcode**: Builds iOS
+- **Codemagic**: CI/CD
+- **Firebase Console**: Backend management
+- **Vercel**: Backend API hosting
+
+### Changelogs & Documentos Técnicos
+- `CHANGELOG_3_SECOES.md` - Implementação 3 seções (v1.0.15+16)
+- `FIREBASE_CONFIG_INSTRUCTIONS.md` - Setup Firebase
+- `CODEMAGIC_IOS_SETUP.md` - Setup CI/CD iOS
+- `GUIA_PAGAMENTO_CARTAO.md` - Integração Mercado Pago
+- `NOTIFICACOES_SISTEMA.md` - Sistema de notificações
+
+---
+
+## 👥 Equipe & Contato
+
+**Desenvolvedor**: Alberto (nalbe)  
+**Última Atualização**: 22/12/2025  
+**Versão Atual**: 1.0.15+16  
+
+---
+
+## 📝 Notas Finais
+
+Este documento serve como referência principal para o desenvolvimento e manutenção do aplicativo Pedejá. Deve ser atualizado sempre que houver mudanças significativas na arquitetura, funcionalidades ou processos.
+
+Para dúvidas sobre implementações específicas, consulte os changelogs e documentos técnicos listados na seção "Referências & Links Úteis".
+
+**Última revisão completa**: 22/12/2025
 
 ### Fase 1: Estrutura Inicial (Mensagens 1-10)
 **Objetivo**: Criar a base do aplicativo com catálogo de produtos e restaurantes

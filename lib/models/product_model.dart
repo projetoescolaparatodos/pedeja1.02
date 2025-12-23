@@ -91,9 +91,13 @@ class ProductModel {
     return 'https://api-pedeja.vercel.app$rawImage';
   }
 
-  /// Formata preço para exibição (R$ 25,90)
+  /// Formata preço para exibição (R$ 25,90 ou R$ 20)
   String get formattedPrice {
-    return 'R\$ ${price.toStringAsFixed(2).replaceAll('.', ',')}';
+    if (price == price.toInt()) {
+      return 'R\$ ${price.toInt()}';
+    } else {
+      return 'R\$ ${price.toStringAsFixed(2).replaceAll('.', ',')}';
+    }
   }
 
   /// Verifica se produto tem promoção
@@ -114,8 +118,25 @@ class ProductModel {
   /// Verifica se tem range de preços
   bool get hasPriceRange => hasMultipleBrands && minPrice != maxPrice;
   
+  /// Formata preço (inteiro sem centavos, decimal com centavos)
+  String _formatPrice(double value) {
+    if (value == value.toInt()) {
+      // Preço inteiro: R$ 20
+      return 'R\$ ${value.toInt()}';
+    } else {
+      // Preço com centavos: R$ 34,89
+      return 'R\$ ${value.toStringAsFixed(2).replaceAll('.', ',')}';
+    }
+  }
+  
   /// Formata preço mínimo para exibição
-  String get displayMinPrice => 'R\$ ${minPrice.toStringAsFixed(2).replaceAll('.', ',')}';
+  String get displayMinPrice => _formatPrice(minPrice);
+  
+  /// Formata preço máximo para exibição
+  String get displayMaxPrice => _formatPrice(maxPrice);
+  
+  /// Exibe range completo de preços
+  String get priceRangeText => '$displayMinPrice - $displayMaxPrice';
   
   /// Alias para formattedPrice
   String get displayPrice => formattedPrice;

@@ -26,6 +26,8 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
   String? _error;
   Timer? _refreshTimer;
   RestaurantModel? _currentRestaurant;
+  String _selectedCategory = 'Todos';
+  List<String> _availableCategories = ['Todos'];
 
   @override
   void initState() {
@@ -90,6 +92,15 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
                 .map((p) => ProductModel.fromJson(p))
                 .toList();
             _isLoading = false;
+            
+            // Extrair categorias únicas dos produtos
+            final categories = <String>{'Todos'};
+            for (var product in _products) {
+              if (product.category != null && product.category!.isNotEmpty) {
+                categories.add(product.category!);
+              }
+            }
+            _availableCategories = categories.toList();
           });
         }
       } else {
@@ -390,24 +401,50 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 24),
-          child: Text(
-            'Cardápio',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              shadows: [
-                Shadow(
-                  color: Colors.black26,
-                  blurRadius: 4,
-                ),
-              ],
+        // Filtros de categoria
+        if (_availableCategories.length > 1)
+          SizedBox(
+            height: 48,
+            child: ListView.builder(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              scrollDirection: Axis.horizontal,
+              itemCount: _availableCategories.length,
+              itemBuilder: (context, index) {
+                final category = _availableCategories[index];
+                final isSelected = _selectedCategory == category;
+                
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: FilterChip(
+                    selected: isSelected,
+                    label: Text(category),
+                    onSelected: (selected) {
+                      setState(() {
+                        _selectedCategory = category;
+                      });
+                    },
+                    backgroundColor: const Color(0xFF033D35),
+                    selectedColor: const Color(0xFF74241F),
+                    labelStyle: TextStyle(
+                      color: isSelected ? Colors.white : const Color(0xFFE39110),
+                      fontWeight: FontWeight.w500,
+                    ),
+                    side: const BorderSide(
+                      color: Color(0xFFE39110),
+                      width: 1,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                  ),
+                );
+              },
             ),
           ),
-        ),
-        const SizedBox(height: 16),
+        
+        if (_availableCategories.length > 1)
+          const SizedBox(height: 16),
+        
         GridView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
@@ -418,11 +455,11 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
             crossAxisSpacing: 16,
             mainAxisSpacing: 16,
           ),
-          itemCount: _products.length,
+          itemCount: _filteredProducts.length,
           itemBuilder: (context, index) {
             final restaurant = _currentRestaurant ?? widget.restaurant;
             return ProductCard(
-              product: _products[index],
+              product: _filteredProducts[index],
               isRestaurantOpen: restaurant.apiIsOpen == true,
             );
           },
@@ -430,5 +467,12 @@ class _RestaurantDetailPageState extends State<RestaurantDetailPage> {
         const SizedBox(height: 24),
       ],
     );
+  }
+
+  List<ProductModel> get _filteredProducts {
+    if (_selectedCategory == 'Todos') {
+      return _products;
+    }
+    return _products.where((p) => p.category == _selectedCategory).toList();
   }
 }

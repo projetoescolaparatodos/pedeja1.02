@@ -139,6 +139,39 @@ class ProductCard extends StatelessWidget {
                 ),
               ),
 
+            // Badge de múltiplas marcas (canto superior esquerdo)
+            if (product.hasMultipleBrands && product.brands.isNotEmpty)
+              Positioned(
+                top: 8,
+                left: 8,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF74241F).withValues(alpha: 0.95),
+                    border: Border.all(
+                      color: const Color(0xFFE39110),
+                      width: 1.5,
+                    ),
+                    borderRadius: BorderRadius.circular(8),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.3),
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Text(
+                    '${product.brands.length} marcas',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+
             // TEXTOS E PREÇO (parte inferior)
             Positioned(
               left: 12,
@@ -183,7 +216,7 @@ class ProductCard extends StatelessWidget {
                       ),
                       child: Text(
                         product.hasPriceRange 
-                            ? 'A partir de ${product.displayMinPrice}'
+                            ? product.priceRangeText
                             : product.formattedPrice,
                         style: const TextStyle(
                           color: Color(0xFFE39110), // Texto dourado
@@ -193,27 +226,6 @@ class ProductCard extends StatelessWidget {
                       ),
                     ),
                   ),
-                  
-                  // Badge de múltiplas marcas (CORRIGIDO: removido Positioned)
-                  if (product.hasMultipleBrands && product.brands.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 6),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFE39110).withValues(alpha: 0.9),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          '${product.brands.length} marcas',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ),
                 ],
               ),
             ),

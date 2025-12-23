@@ -44,26 +44,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   late Future<List<PromotionModel>> _promotionsFuture;
   int _currentPromoIndex = 0;
 
-  // Categorias de farmácia/mercado para separação
-  static const List<String> _pharmacyMarketCategories = [
-    'remédio',
-    'remedio',
-    'farmácia',
-    'farmacia',
-    'mercearia',
-    'higiene',
-    'cuidados pessoais',
-    'beleza',
-    'limpeza',
-    'bebê',
-    'bebe',
-    'pet shop',
-    'saúde',
-    'saude',
-    'perfumaria',
-    'varejinho',
-  ];
-
   @override
   void initState() {
     super.initState();
@@ -81,13 +61,22 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     });
 
     // ⚡ Carregar dados do catálogo em paralelo
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      debugPrint('🚀 [HomePage] Iniciando carregamento das 3 seções...');
       final catalog = context.read<CatalogProvider>();
-      // Carregar em paralelo para economizar tempo
-      Future.wait([
-        catalog.loadRestaurants(),
-        catalog.loadRandomProducts(),
-      ]);
+      
+      try {
+        // Carregar 3 seções em paralelo para economizar tempo
+        await Future.wait([
+          catalog.loadRestaurants(),
+          catalog.loadFeaturedProducts(),
+          catalog.loadPharmacyProducts(),
+          catalog.loadMarketProducts(),
+        ]);
+        debugPrint('✅ [HomePage] 3 seções carregadas com sucesso!');
+      } catch (e) {
+        debugPrint('❌ [HomePage] Erro ao carregar seções: $e');
+      }
     });
   }
 
@@ -178,12 +167,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     final hoursUpdated = await OperatingHoursService.refreshOperatingHours(force: true);
     debugPrint('🕒 [HomePage] Horários ${hoursUpdated ? "atualizados" : "não atualizados"}');
     
-    // Recarrega dados do catálogo
+    // Recarrega dados do catálogo (3 seções em paralelo)
     if (mounted) {
       final catalog = context.read<CatalogProvider>();
       await Future.wait([
         catalog.loadRestaurants(),
-        catalog.loadRandomProducts(force: true),
+        catalog.loadFeaturedProducts(force: true),
+        catalog.loadPharmacyProducts(force: true),
+        catalog.loadMarketProducts(force: true),
       ]);
     }
     
@@ -265,8 +256,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }).toList();
   }
 
-  /// ✅ Filtrar produtos de comida pela busca
-  List<dynamic> _filterFoodProducts(List<dynamic> products) {
+  /// ✅ Filtrar produtos em destaque pela busca
+  List<dynamic> _filterFeaturedProducts(List<dynamic> products) {
     if (_searchQuery.isEmpty) return products;
     return products.where((p) {
       final query = _searchQuery.toLowerCase();
@@ -307,6 +298,60 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           (p.category?.toLowerCase().contains(normalizedQuery) ?? false) ||
           badgesText.contains(normalizedQuery);
     }).toList();
+  }
+
+  /// ✅ Filtrar produtos de mercado pela busca
+  List<dynamic> _filterMarketProducts(List<dynamic> products) {
+    if (_searchQuery.isEmpty) return products;
+    return products.where((p) {
+      final query = _searchQuery.toLowerCase();
+      
+      // ✅ Pesquisar nos badges/tags (normalizar _ para espaço)
+      final badges = p.badges as List<dynamic>? ?? [];
+      final badgesText = badges
+          .map((badge) => badge.toString().toLowerCase().replaceAll('_', ' '))
+          .join(' ');
+      
+      // Normalizar query também
+      final normalizedQuery = query.trim();
+      
+      return (p.name?.toLowerCase().contains(normalizedQuery) ?? false) ||
+          (p.description?.toLowerCase().contains(normalizedQuery) ?? false) ||
+          (p.category?.toLowerCase().contains(normalizedQuery) ?? false) ||
+          badgesText.contains(normalizedQuery);
+    }).toList();
+  }
+
+  /// Scroll suave para o topo da página
+  void _scrollToTop() {
+    _scrollController.animateTo(
+      0,
+      duration: const Duration(milliseconds: 800),
+      curve: Curves.easeInOut,
+    );
+  }
+
+  /// Scroll suave para uma seção específica (0=Destaque, 1=Farmácia, 2=Mercado)
+  void _scrollToSection(int section) {
+    // Estimativas de posição (ajuste conforme necessário)
+    double targetOffset = 0;
+    switch (section) {
+      case 0: // Produtos em Destaque
+        targetOffset = 900;
+        break;
+      case 1: // Farmácia
+        targetOffset = 1600;
+        break;
+      case 2: // Mercado
+        targetOffset = 2400;
+        break;
+    }
+    
+    _scrollController.animateTo(
+      targetOffset,
+      duration: const Duration(milliseconds: 800),
+      curve: Curves.easeInOut,
+    );
   }
 
   @override
@@ -360,12 +405,21 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 ),
                 
                 const SliverToBoxAdapter(
-                  child: SizedBox(height: 8), // ✅ Reduzido de 16 para 8
+                  child: SizedBox(height: 32),
                 ),
                 
-                // Farmácia & Mercado
+                // Farmácia
                 SliverToBoxAdapter(
-                  child: _buildFarmaciaEMercado(),
+                  child: _buildFarmacia(),
+                ),
+                
+                const SliverToBoxAdapter(
+                  child: SizedBox(height: 32),
+                ),
+                
+                // Mercado
+                SliverToBoxAdapter(
+                  child: _buildMercado(),
                 ),
                 
                 const SliverToBoxAdapter(
@@ -512,7 +566,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           },
           style: const TextStyle(color: Colors.white),
           decoration: InputDecoration(
-            hintText: 'O que você quer comer hoje?',
+            hintText: 'Do que você precisa hoje?',
             hintStyle: const TextStyle(
               color: Color(0x9AFFFFFF),
             ),
@@ -552,7 +606,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         const Padding(
           padding: EdgeInsets.symmetric(horizontal: 16),
           child: Text(
-            'Restaurantes',
+            'Estabelecimentos',
             style: TextStyle(
               color: Colors.white,
               fontSize: 24,
@@ -600,6 +654,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             }
 
             final filteredRestaurants = _filterRestaurants(catalog.restaurants);
+
+            // Se busca ativa e nenhum resultado, esconde a seção
+            if (_searchQuery.isNotEmpty && filteredRestaurants.isEmpty) {
+              return const SizedBox.shrink();
+            }
 
             if (filteredRestaurants.isEmpty) {
               return const SizedBox(
@@ -656,36 +715,40 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   Widget _buildProdutosEmDestaque() {
     return Consumer<CatalogProvider>(
       builder: (context, catalog, child) {
-        // FILTRA APENAS PRODUTOS DE COMIDA (exclui farmácia/mercado)
-        final foodProducts = catalog.randomProducts.where((product) {
-          final category = (product.category ?? '').toLowerCase().trim();
-          
-          // Retorna TRUE se NÃO for farmácia/mercado
-          return !_pharmacyMarketCategories.any((pharmaCategory) => 
-            category == pharmaCategory || category.contains(pharmaCategory)
-          );
-        }).toList();
+        // Usa a nova lista de produtos em destaque
+        final featuredProducts = catalog.featuredProducts;
 
         // ✅ Aplica filtro de busca
-        final searchFilteredProducts = _filterFoodProducts(foodProducts);
+        final searchFilteredProducts = _filterFeaturedProducts(featuredProducts);
 
         // Aplica filtro de categoria selecionada
         final filteredProducts = catalog.selectedCategory == 'Todos'
             ? searchFilteredProducts
             : searchFilteredProducts.where((p) => p.category == catalog.selectedCategory).toList();
 
+        // Se busca ativa e nenhum resultado, esconde a seção
+        if (_searchQuery.isNotEmpty && filteredProducts.isEmpty) {
+          return const SizedBox.shrink();
+        }
+
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Padding(
               padding: EdgeInsets.symmetric(horizontal: 16),
-              child: Text(
-                'Produtos em Destaque',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                ),
+              child: Row(
+                children: [
+                  Icon(Icons.restaurant, color: Color(0xFFE39110), size: 28),
+                  SizedBox(width: 8),
+                  Text(
+                    'Produtos em Destaque',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
               ),
             ),
             const SizedBox(height: 16),
@@ -732,7 +795,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             const SizedBox(height: 16),
 
             // Loading
-            if (catalog.randomProductsLoading)
+            if (catalog.featuredProductsLoading)
               const Center(
                 child: Padding(
                   padding: EdgeInsets.all(32),
@@ -743,7 +806,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               )
             
             // Error
-            else if (catalog.randomProductsError != null)
+            else if (catalog.featuredProductsError != null)
               Center(
                 child: Padding(
                   padding: const EdgeInsets.all(32),
@@ -756,14 +819,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                       ),
                       const SizedBox(height: 16),
                       Text(
-                        catalog.randomProductsError!,
+                        catalog.featuredProductsError!,
                         textAlign: TextAlign.center,
                         style: const TextStyle(color: Colors.white70),
                       ),
                       const SizedBox(height: 16),
                       ElevatedButton.icon(
                         onPressed: () {
-                          catalog.loadRandomProducts(force: true);
+                          catalog.loadFeaturedProducts(force: true);
                         },
                         icon: const Icon(Icons.refresh),
                         label: const Text('Tentar Novamente'),
@@ -777,7 +840,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 ),
               )
             
-            // Carrossel de produtos de comida
+            // Carrossel de produtos em destaque
             else if (filteredProducts.isEmpty)
               Center(
                 child: Padding(
@@ -809,23 +872,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     );
   }
 
-  Widget _buildFarmaciaEMercado() {
+  Widget _buildFarmacia() {
     return Consumer<CatalogProvider>(
       builder: (context, catalog, child) {
-        // FILTRA APENAS PRODUTOS DE FARMÁCIA/MERCADO
-        final pharmacyProducts = catalog.randomProducts.where((product) {
-          final category = (product.category ?? '').toLowerCase().trim();
-          
-          // Retorna TRUE se FOR farmácia/mercado
-          return _pharmacyMarketCategories.any((pharmaCategory) => 
-            category == pharmaCategory || category.contains(pharmaCategory)
-          );
-        }).toList();
-
-        // Se não tem produtos dessa categoria, não mostra seção
-        if (pharmacyProducts.isEmpty) {
-          return const SizedBox.shrink();
-        }
+        // Usa a nova lista de produtos de farmácia
+        final pharmacyProducts = catalog.pharmacyProducts;
 
         // ✅ Aplica filtro de busca
         final searchFilteredProducts = _filterPharmacyProducts(pharmacyProducts);
@@ -835,18 +886,28 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             ? searchFilteredProducts
             : searchFilteredProducts.where((p) => p.category == catalog.selectedCategory).toList();
 
+        // Se busca ativa e nenhum resultado, esconde a seção
+        if (_searchQuery.isNotEmpty && filteredProducts.isEmpty) {
+          return const SizedBox.shrink();
+        }
+
+        // Se não tem produtos dessa categoria, não mostra seção
+        if (pharmacyProducts.isEmpty && !catalog.pharmacyProductsLoading) {
+          return const SizedBox.shrink();
+        }
+
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Título com ícone
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16),
               child: Row(
-                children: const [
+                children: [
                   Icon(Icons.local_pharmacy, color: Color(0xFFE39110), size: 28),
                   SizedBox(width: 8),
                   Text(
-                    'Farmácia & Mercado',
+                    'Farmácia',
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 24,
@@ -869,15 +930,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   itemBuilder: (context, index) {
                     final category = catalog.availableCategories[index];
                     final isSelected = catalog.selectedCategory == category;
-
-                    // Mostra apenas categorias de farmácia
-                    final isFarmaciaCategory = _pharmacyMarketCategories.any(
-                      (pharma) => category.toLowerCase().contains(pharma)
-                    );
-
-                    if (!isFarmaciaCategory && category != 'Todos') {
-                      return const SizedBox.shrink();
-                    }
 
                     return Padding(
                       padding: const EdgeInsets.only(right: 8),
@@ -909,7 +961,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             const SizedBox(height: 16),
 
             // Loading
-            if (catalog.randomProductsLoading)
+            if (catalog.pharmacyProductsLoading)
               const Center(
                 child: Padding(
                   padding: EdgeInsets.all(32),
@@ -920,7 +972,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               )
             
             // Error
-            else if (catalog.randomProductsError != null)
+            else if (catalog.pharmacyProductsError != null)
               Center(
                 child: Padding(
                   padding: const EdgeInsets.all(32),
@@ -933,9 +985,21 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                       ),
                       const SizedBox(height: 16),
                       Text(
-                        catalog.randomProductsError!,
+                        catalog.pharmacyProductsError!,
                         textAlign: TextAlign.center,
                         style: const TextStyle(color: Colors.white70),
+                      ),
+                      const SizedBox(height: 16),
+                      ElevatedButton.icon(
+                        onPressed: () {
+                          catalog.loadPharmacyProducts(force: true);
+                        },
+                        icon: const Icon(Icons.refresh),
+                        label: const Text('Tentar Novamente'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF74241F),
+                          foregroundColor: Colors.white,
+                        ),
                       ),
                     ],
                   ),
@@ -943,6 +1007,172 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               )
             
             // Carrossel de produtos de farmácia
+            else if (filteredProducts.isEmpty)
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(32),
+                  child: Column(
+                    children: [
+                      const Icon(
+                        Icons.search_off,
+                        size: 64,
+                        color: Color(0xFFE39110),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        _searchQuery.isNotEmpty 
+                            ? 'Nenhum produto encontrado para "$_searchQuery"'
+                            : 'Nenhum produto encontrado',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontSize: 16, color: Colors.white70),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            else
+              _buildProductCarousel(filteredProducts, catalog),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildMercado() {
+    return Consumer<CatalogProvider>(
+      builder: (context, catalog, child) {
+        // Usa a nova lista de produtos de mercado
+        final marketProducts = catalog.marketProducts;
+
+        // ✅ Aplica filtro de busca
+        final searchFilteredProducts = _filterMarketProducts(marketProducts);
+
+        // Aplica filtro de categoria selecionada
+        final filteredProducts = catalog.selectedCategory == 'Todos'
+            ? searchFilteredProducts
+            : searchFilteredProducts.where((p) => p.category == catalog.selectedCategory).toList();
+
+        // Se busca ativa e nenhum resultado, esconde a seção
+        if (_searchQuery.isNotEmpty && filteredProducts.isEmpty) {
+          return const SizedBox.shrink();
+        }
+
+        // Se não tem produtos dessa categoria, não mostra seção
+        if (marketProducts.isEmpty && !catalog.marketProductsLoading) {
+          return const SizedBox.shrink();
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Título com ícone
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                children: [
+                  Icon(Icons.shopping_cart, color: Color(0xFFE39110), size: 28),
+                  SizedBox(width: 8),
+                  Text(
+                    'Mercado',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Filtros de categoria dinâmicos
+            if (catalog.availableCategories.isNotEmpty)
+              SizedBox(
+                height: 48,
+                child: ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  scrollDirection: Axis.horizontal,
+                  itemCount: catalog.availableCategories.length,
+                  itemBuilder: (context, index) {
+                    final category = catalog.availableCategories[index];
+                    final isSelected = catalog.selectedCategory == category;
+
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: FilterChip(
+                        selected: isSelected,
+                        label: Text(category),
+                        onSelected: (selected) {
+                          catalog.selectCategory(category);
+                        },
+                        backgroundColor: const Color(0xFF033D35),
+                        selectedColor: const Color(0xFF74241F),
+                        labelStyle: TextStyle(
+                          color: isSelected ? Colors.white : const Color(0xFFE39110),
+                          fontWeight: FontWeight.w500,
+                        ),
+                        side: const BorderSide(
+                          color: Color(0xFFE39110),
+                          width: 1,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+
+            const SizedBox(height: 16),
+
+            // Loading
+            if (catalog.marketProductsLoading)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(32),
+                  child: CircularProgressIndicator(
+                    color: Color(0xFFE39110),
+                  ),
+                ),
+              )
+            
+            // Error
+            else if (catalog.marketProductsError != null)
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(32),
+                  child: Column(
+                    children: [
+                      const Icon(
+                        Icons.error_outline,
+                        size: 64,
+                        color: Color(0xFFE39110),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        catalog.marketProductsError!,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: Colors.white70),
+                      ),
+                      const SizedBox(height: 16),
+                      ElevatedButton.icon(
+                        onPressed: () {
+                          catalog.loadMarketProducts(force: true);
+                        },
+                        icon: const Icon(Icons.refresh),
+                        label: const Text('Tentar Novamente'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF74241F),
+                          foregroundColor: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            
+            // Carrossel de produtos de mercado
             else if (filteredProducts.isEmpty)
               Center(
                 child: Padding(
@@ -1401,6 +1631,51 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         });
                       },
                     ),
+                    const Divider(color: Color(0xFFE39110), height: 32),
+                    Padding(
+                      padding: const EdgeInsets.only(left: 16, bottom: 8),
+                      child: Text(
+                        'Navegar para',
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.6),
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    _buildDrawerItem(
+                      icon: Icons.restaurant,
+                      title: 'Estabelecimentos',
+                      onTap: () {
+                        Navigator.pop(context);
+                        _scrollToTop();
+                      },
+                    ),
+                    _buildDrawerItem(
+                      icon: Icons.star,
+                      title: 'Produtos em Destaque',
+                      onTap: () {
+                        Navigator.pop(context);
+                        _scrollToSection(0);
+                      },
+                    ),
+                    _buildDrawerItem(
+                      icon: Icons.local_pharmacy,
+                      title: 'Farmácia',
+                      onTap: () {
+                        Navigator.pop(context);
+                        _scrollToSection(1);
+                      },
+                    ),
+                    _buildDrawerItem(
+                      icon: Icons.shopping_cart,
+                      title: 'Mercado',
+                      onTap: () {
+                        Navigator.pop(context);
+                        _scrollToSection(2);
+                      },
+                    ),
+                    const Divider(color: Color(0xFFE39110), height: 32),
                     _buildDrawerItem(
                       icon: Icons.restaurant_menu,
                       title: 'Estabelecimentos',

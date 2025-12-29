@@ -50,6 +50,26 @@ class AuthState extends ChangeNotifier {
       
       if (currentUser != null) {
         debugPrint('✅ [AuthState] Usuário Firebase encontrado: ${currentUser.email}');
+        
+        // 🍎 iOS: Verificar se há dados no SharedPreferences
+        // Se não houver, significa que houve logout e Firebase não limpou corretamente
+        if (Platform.isIOS) {
+          final prefs = await SharedPreferences.getInstance();
+          final hasLoginData = prefs.containsKey('isLoggedIn') || 
+                               prefs.containsKey('jwtToken');
+          
+          if (!hasLoginData) {
+            debugPrint('⚠️ [AuthState] iOS: Firebase tem usuário mas SharedPreferences está limpo');
+            debugPrint('🚪 [AuthState] Forçando logout do Firebase (limpeza de sessão órfã)');
+            await FirebaseAuth.instance.signOut();
+            await _authService.clearCredentials();
+            _currentUser = null;
+            _isLoading = false;
+            notifyListeners();
+            return;
+          }
+        }
+        
         _currentUser = currentUser;
         
         // Carregar JWT e dados apenas se Firebase já tem sessão ativa
@@ -57,6 +77,10 @@ class AuthState extends ChangeNotifier {
         if (hasCredentials) {
           await _loadUserData();
           debugPrint('✅ [AuthState] Dados do usuário carregados');
+        } else {
+          debugPrint('⚠️ [AuthState] Firebase tem usuário mas sem credenciais salvas - logout');
+          await FirebaseAuth.instance.signOut();
+          _currentUser = null;
         }
       } else {
         debugPrint('❌ [AuthState] Nenhum usuário no Firebase - usuário deslogado');
@@ -378,6 +402,11 @@ class AuthState extends ChangeNotifier {
     try {
       debugPrint('🚪 [AuthState] Iniciando logout completo...');
       
+      // � CRÍTICO: Limpar SharedPreferences PRIMEIRO (antes de qualquer delay)
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.clear(); // Limpa TUDO
+      debugPrint('✅ [AuthState] SharedPreferences limpo (iOS fix)');
+      
       // 🔔 Limpar token FCM antes do logout
       await NotificationService.clearToken();
       
@@ -387,9 +416,6 @@ class AuthState extends ChangeNotifier {
 
       // 🛑 Desconectar Pusher
       await OrderStatusPusherService.disconnect();
-
-      // 🗑️ Limpar estado de login do SharedPreferences
-      await _clearLoginState();
       
       // 🚪 Logout do Firebase + Limpar credenciais (AuthService faz limpeza pesada)
       await _authService.signOut();
@@ -423,14 +449,30 @@ class AuthState extends ChangeNotifier {
             }
           }
           
-          // Se ainda estiver logado, tentar limpar SharedPreferences novamente
+          // Se ainda estiver logado, forçar limpeza final
           if (FirebaseAuth.instance.currentUser != null) {
-            debugPrint('❌ [AuthState] FALHA CRÍTICA: Limpando SharedPreferences manualmente...');
-            final prefs = await SharedPreferences.getInstance();
-            await prefs.clear(); // LIMPA TUDO (último recurso)
+            debugPrint('❌ [AuthState] FALHA CRÍTICA: Forçando limpeza final...');
+            final prefs2 = await SharedPreferences.getInstance();
+            await prefs2.clear(); // Segunda limpeza (garantia)
+            
+            // Garantir que AuthService não tem token
+            await _authService.clearCredentials();
           }
         } else {
-          debugPrint('✅ [AuthState] iOS logout confirmado');
+          debugPrint('✅ [AuthState] iOS logout confirmado - Firebase limpo');
+        }
+        
+        // IMPORTANTE: Verificar se não tem credenciais salvas que causariam auto-login
+        final prefsCheck = await SharedPreferences.getInstance();
+        final hasLoginData = prefsCheck.containsKey('isLoggedIn') || 
+                             prefsCheck.containsKey('jwtToken') ||
+                             prefsCheck.containsKey('userEmail');
+        
+        if (hasLoginData) {
+          debugPrint('⚠️ [AuthState] CRÍTICO: Ainda há dados de login! Limpando novamente...');
+          await prefsCheck.clear();
+        } else {
+          debugPrint('✅ [AuthState] Verificado: Nenhum dado de login restante');
         }
       }
       

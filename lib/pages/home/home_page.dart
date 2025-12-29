@@ -1808,21 +1808,32 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         );
 
                         if (shouldLogout == true && mounted) {
-                          // Fechar drawer
+                          // Fechar drawer IMEDIATAMENTE
                           Navigator.pop(context);
                           
-                          // Fazer logout
-                          final authState = Provider.of<AuthState>(context, listen: false);
-                          await authState.signOut();
+                          // Aguardar navegação completar antes de fazer logout
+                          await Future.delayed(const Duration(milliseconds: 100));
                           
-                          // Navegar para página de login
-                          if (mounted) {
-                            Navigator.of(context).pushAndRemoveUntil(
-                              MaterialPageRoute(
-                                builder: (context) => const LoginPage(),
-                              ),
-                              (route) => false,
-                            );
+                          try {
+                            // Fazer logout
+                            final authState = Provider.of<AuthState>(context, listen: false);
+                            
+                            // Navegar ANTES do logout (evita race condition no iOS)
+                            if (mounted) {
+                              await Navigator.of(context).pushAndRemoveUntil(
+                                MaterialPageRoute(
+                                  builder: (context) => const LoginPage(),
+                                ),
+                                (route) => false,
+                              );
+                            }
+                            
+                            // DEPOIS fazer logout em background
+                            authState.signOut().catchError((e) {
+                              debugPrint('❌ Erro ao fazer logout em background: $e');
+                            });
+                          } catch (e) {
+                            debugPrint('❌ Erro ao processar logout: $e');
                           }
                         }
                       },

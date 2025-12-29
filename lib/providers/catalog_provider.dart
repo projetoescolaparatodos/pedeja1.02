@@ -169,7 +169,13 @@ class CatalogProvider extends ChangeNotifier {
         _restaurantsError = 'Erro ao carregar restaurantes: ${response.statusCode}';
       }
     } catch (error) {
-      _restaurantsError = 'Erro de conexão: $error';
+      if (error.toString().contains('SocketException') ||
+          error.toString().contains('Failed host lookup')) {
+        _restaurantsError = 'Erro de conexão. Verifique sua internet.';
+      } else {
+        _restaurantsError = 'Erro ao carregar. Tente novamente.';
+      }
+      debugPrint('❌ [CatalogProvider] Erro: $error');
     } finally {
       _restaurantsLoading = false;
       notifyListeners();
@@ -233,7 +239,12 @@ class CatalogProvider extends ChangeNotifier {
       }
     } catch (error) {
       debugPrint('❌ [CatalogProvider] Erro produtos em destaque: $error');
-      _featuredProductsError = 'Erro de conexão: $error';
+      if (error.toString().contains('SocketException') ||
+          error.toString().contains('Failed host lookup')) {
+        _featuredProductsError = 'Sem conexão com a internet';
+      } else {
+        _featuredProductsError = 'Erro ao carregar produtos';
+      }
     } finally {
       _featuredProductsLoading = false;
       notifyListeners();
@@ -295,7 +306,12 @@ class CatalogProvider extends ChangeNotifier {
       }
     } catch (error) {
       debugPrint('❌ [CatalogProvider] Erro produtos de farmácia: $error');
-      _pharmacyProductsError = 'Erro de conexão: $error';
+      if (error.toString().contains('SocketException') ||
+          error.toString().contains('Failed host lookup')) {
+        _pharmacyProductsError = 'Sem conexão com a internet';
+      } else {
+        _pharmacyProductsError = 'Erro ao carregar produtos';
+      }
     } finally {
       _pharmacyProductsLoading = false;
       notifyListeners();
@@ -357,7 +373,12 @@ class CatalogProvider extends ChangeNotifier {
       }
     } catch (error) {
       debugPrint('❌ [CatalogProvider] Erro produtos de mercado: $error');
-      _marketProductsError = 'Erro de conexão: $error';
+      if (error.toString().contains('SocketException') ||
+          error.toString().contains('Failed host lookup')) {
+        _marketProductsError = 'Sem conexão com a internet';
+      } else {
+        _marketProductsError = 'Erro ao carregar produtos';
+      }
     } finally {
       _marketProductsLoading = false;
       notifyListeners();

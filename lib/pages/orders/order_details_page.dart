@@ -167,6 +167,8 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> with WidgetsBinding
         restaurantName: widget.order.restaurantName, // ✅ Passar nome do restaurante
         authToken: authState.jwtToken, // ✅ CRÍTICO: Passar token JWT para autenticação
         onMessageReceived: (message) {
+          if (!mounted) return;
+          
           // ✅ Evitar duplicatas: verificar se já existe mensagem similar recente
           final isDuplicate = _messages.any((m) => 
             m.message == message.message && 
@@ -184,20 +186,27 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> with WidgetsBinding
           }
         },
         onError: (error) {
+          if (!mounted) return;
           setState(() {
-            _error = error;
+            _error = 'Erro no chat. Tente novamente.';
           });
+          debugPrint('❌ [OrderDetailsPage] Chat error: $error');
         },
       );
 
-      setState(() {
-        _isConnecting = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isConnecting = false;
+        });
+      }
     } catch (e) {
-      setState(() {
-        _error = 'Erro ao conectar ao chat: $e';
-        _isConnecting = false;
-      });
+      debugPrint('❌ [OrderDetailsPage] Erro ao conectar chat: $e');
+      if (mounted) {
+        setState(() {
+          _error = 'Erro ao conectar ao chat. Verifique sua conexão.';
+          _isConnecting = false;
+        });
+      }
     }
   }
 

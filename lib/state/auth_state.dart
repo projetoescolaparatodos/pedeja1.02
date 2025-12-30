@@ -510,6 +510,16 @@ class AuthState extends ChangeNotifier {
         } else {
           debugPrint('✅ [AuthState] Verificado: Nenhum dado de login restante');
         }
+        
+        // 🔐 CRÍTICO: Restaurar persistência LOCAL para próximo login
+        // Sem isso, chat/pusher/notificações não funcionarão após novo login
+        debugPrint('🔐 [AuthState] Restaurando persistência LOCAL...');
+        try {
+          await FirebaseAuth.instance.setPersistence(Persistence.LOCAL);
+          debugPrint('✅ [AuthState] Persistência LOCAL restaurada - próximo login funcionará normalmente');
+        } catch (e) {
+          debugPrint('⚠️ [AuthState] Erro ao restaurar persistência: $e');
+        }
       }
       
       _isLoading = false;
@@ -534,6 +544,16 @@ class AuthState extends ChangeNotifier {
         final prefs = await SharedPreferences.getInstance();
         await prefs.clear();
       } catch (_) {}
+      
+      // 🔐 IMPORTANTE: Restaurar persistência mesmo com erro
+      if (Platform.isIOS) {
+        try {
+          await FirebaseAuth.instance.setPersistence(Persistence.LOCAL);
+          debugPrint('✅ [AuthState] Persistência LOCAL restaurada após erro');
+        } catch (_) {
+          debugPrint('⚠️ [AuthState] Não foi possível restaurar persistência');
+        }
+      }
       
       notifyListeners();
     }

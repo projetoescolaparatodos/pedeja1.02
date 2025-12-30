@@ -1,7 +1,7 @@
 # 📱 PedeJá - Documentação Completa do Projeto
 
-> **Última Atualização**: 22 de Dezembro de 2025  
-> **Versão Atual**: 1.0.15+16  
+> **Última Atualização**: 30 de Dezembro de 2025  
+> **Versão Atual**: 1.0.20+21  
 > **Status**: Em Produção
 
 ## 📋 Índice
@@ -9,11 +9,12 @@
 2. [Arquitetura do Sistema](#arquitetura-do-sistema)
 3. [Funcionalidades Principais](#funcionalidades-principais)
 4. [Implementações Recentes](#implementações-recentes)
-5. [Backend API](#backend-api)
-6. [Firebase & Autenticação](#firebase--autenticação)
-7. [Estrutura de Código](#estrutura-de-código)
-8. [Guia de Desenvolvimento](#guia-de-desenvolvimento)
-9. [Troubleshooting](#troubleshooting)
+5. [Correções Críticas de Logout iOS](#correções-críticas-de-logout-ios)
+6. [Backend API](#backend-api)
+7. [Firebase & Autenticação](#firebase--autenticação)
+8. [Estrutura de Código](#estrutura-de-código)
+9. [Guia de Desenvolvimento](#guia-de-desenvolvimento)
+10. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -710,6 +711,195 @@ TextFormField(
   },
 )
 ```
+
+---
+
+## 🚨 Correções Críticas de Logout iOS (v1.0.17 → v1.0.20+21)
+
+### 📌 Problema Identificado
+
+**Data**: 29-30 de Dezembro de 2025  
+**Versões Afetadas**: Todas até v1.0.17+18  
+**Plataforma**: iOS (iPhone/iPad)  
+**Severidade**: CRÍTICA (P0)
+
+**Sintomas**:
+1. ❌ Usuário clica em "Sair" → App vai para tela de login MAS continua logado
+2. ❌ Ao reabrir o app → Faz auto-login automaticamente
+3. ❌ SharedPreferences limpo MAS sessão persiste
+4. ✅ Android funcionava perfeitamente
+
+### 🔍 Root Cause
+
+Firebase Auth no iOS usa **Apple Keychain** (além de SharedPreferences) para persistir sessões:
+
+```
+iOS:                              Android:
+├─ SharedPreferences (app)        └─ SharedPreferences only
+└─ Keychain (system-level) ⚠️
+```
+
+**Fluxo do Bug**:
+```dart
+// ❌ CÓDIGO BUGADO
+signOut() → Delays iOS (500ms) → prefs.clear() → Navigation
+           ↓
+    Keychain mantém token ativo
+           ↓
+    _initAuth() encontra usuário
+           ↓
+    Auto-login reativa sessão ❌
+```
+
+### ✅ Solução (4 Versões Evolutivas)
+
+#### v1.0.17+18 (Commit: c12fb03)
+**Fix**: Navegação ANTES de logout
+```dart
+Navigator.pushAndRemoveUntil(...); // Primeiro
+authState.signOut().catchError(...); // Depois (background)
+```
+**Resultado**: Evitou crashes mas não resolveu auto-login
+
+#### v1.0.18+19 (Commit: 712b033)
+**Fix**: Limpar SharedPreferences ANTES dos delays
+```dart
+final prefs = await SharedPreferences.getInstance();
+await prefs.clear(); // PRIMEIRO
+await _authService.signOut(); // Depois
+```
+**Resultado**: Melhorou mas Keychain persistia
+
+#### v1.0.19+20 (Commit: b66c359)
+**Fix**: Desabilitar Keychain com `setPersistence(NONE)`
+```dart
+if (Platform.isIOS) {
+  await FirebaseAuth.instance.setPersistence(Persistence.NONE);
+}
+await prefs.clear();
+await _authService.signOut();
+```
+**Resultado**: Logout funcionou MAS quebrou próximo login! ❌
+
+#### v1.0.20+21 (Commit: 7e175f7) ⭐ SOLUÇÃO FINAL
+**Fix**: Restaurar `setPersistence(LOCAL)` após logout
+```dart
+// lib/state/auth_state.dart
+Future<void> signOut() async {
+  try {
+    // 1️⃣ iOS: Desabilitar Keychain temporariamente
+    if (Platform.isIOS) {
+      await FirebaseAuth.instance.setPersistence(Persistence.NONE);
+      debugPrint('✅ Persistência NONE (temporário)');
+    }
+    
+    // 2️⃣ Limpar dados
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.clear();
+    
+    // 3️⃣ Logout com validação
+    await _authService.signOut();
+    
+    if (Platform.isIOS) {
+      // Verificar se realmente deslogou
+      for (int i = 0; i < 3; i++) {
+        final user = FirebaseAuth.instance.currentUser;
+        if (user == null) break;
+        
+        await FirebaseAuth.instance.signOut();
+        await Future.delayed(Duration(milliseconds: 200));
+      }
+      
+      // 4️⃣ 🔐 CRÍTICO: Restaurar persistência LOCAL
+      await FirebaseAuth.instance.setPersistence(Persistence.LOCAL);
+      debugPrint('✅ Persistência LOCAL restaurada');
+    }
+    
+  } catch (e) {
+    // Mesmo com erro, restaurar persistência
+    if (Platform.isIOS) {
+      await FirebaseAuth.instance.setPersistence(Persistence.LOCAL);
+    }
+  }
+}
+```
+
+### 📊 Impacto da Solução
+
+| Funcionalidade | Sem Fix | Com v1.0.20+21 |
+|----------------|---------|----------------|
+| **Logout iOS** | ❌ Continua logado | ✅ Desconecta 100% |
+| **Auto-login** | ❌ Reativa sessão | ✅ Não reativa |
+| **Chat (Pusher)** | ❌ Perde token | ✅ Token persiste |
+| **Notificações FCM** | ❌ Perde userId | ✅ Funciona normal |
+| **Pedidos Tempo Real** | ❌ Desconecta | ✅ Reconecta auto |
+| **Android** | ✅ OK | ✅ OK (sem mudanças) |
+
+### 🎯 Por Que Restaurar Persistence.LOCAL?
+
+Sem restauração, `Persistence.NONE` fica configurado globalmente:
+
+```dart
+// ❌ SEM RESTAURAÇÃO (v1.0.19+20)
+Logout: setPersistence(NONE) → signOut() ✅
+         ↓
+Próximo Login: signIn()
+         ↓
+Token NÃO é salvo (NONE ainda ativo!) ❌
+         ↓
+Chat não recebe jwtToken ❌
+Notificações perdem userId ❌
+Pusher desconecta ❌
+
+// ✅ COM RESTAURAÇÃO (v1.0.20+21)
+Logout: setPersistence(NONE) → signOut() → setPersistence(LOCAL) ✅
+         ↓
+Próximo Login: signIn()
+         ↓
+Token É salvo (LOCAL restaurado) ✅
+         ↓
+Chat recebe jwtToken ✅
+Notificações funcionam ✅
+Pusher conecta ✅
+```
+
+### 📝 Commits
+
+| Versão | Data | Descrição |
+|--------|------|-----------|
+| v1.0.17+18 | 29/12 | Fix crash - Navegação primeiro |
+| v1.0.18+19 | 29/12 | Limpar SharedPreferences antecipadamente |
+| v1.0.19+20 | 30/12 | setPersistence(NONE) para Keychain |
+| v1.0.20+21 | 30/12 | **Solução final** - Restaurar LOCAL |
+
+### 🔍 Validação no _initAuth
+
+```dart
+Future<void> _initAuth() async {
+  final currentUser = FirebaseAuth.instance.currentUser;
+  
+  if (currentUser != null && Platform.isIOS) {
+    // iOS: Verificar consistência com SharedPreferences
+    final prefs = await SharedPreferences.getInstance();
+    final hasLoginData = prefs.containsKey('isLoggedIn') || 
+                         prefs.containsKey('jwtToken');
+    
+    if (!hasLoginData) {
+      // Sessão órfã detectada - Keychain tem usuário mas SharedPreferences vazio
+      debugPrint('⚠️ iOS: Sessão órfã - forçando logout');
+      await FirebaseAuth.instance.signOut();
+      await _authService.clearCredentials();
+      return;
+    }
+  }
+}
+```
+
+### 📚 Referências
+
+- [Firebase Auth iOS - Keychain](https://firebase.google.com/docs/auth/ios/start)
+- [Auth State Persistence](https://firebase.google.com/docs/auth/web/auth-state-persistence)
+- Commits: `c12fb03`, `712b033`, `b66c359`, `7e175f7`
 
 ---
 

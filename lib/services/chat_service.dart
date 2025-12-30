@@ -115,12 +115,8 @@ class ChatService {
         _restaurantNames[orderId] = restaurantName;
       }
 
-      // ✅ Verificar se já foi inicializado por outro serviço
-      if (!_initialized && OrderStatusPusherService.isInitialized) {
-        debugPrint('💬 [ChatService] Pusher já inicializado pelo OrderStatusPusherService');
-        _initialized = true;
-      }
-
+      // ✅ SEMPRE inicializar o Pusher se ainda não foi feito
+      // Não confiar em OrderStatusPusherService pois está desabilitado
       if (!_initialized) {
         debugPrint('💬 [ChatService] Inicializando Pusher...');
 

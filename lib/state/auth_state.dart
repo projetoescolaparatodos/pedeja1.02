@@ -55,18 +55,47 @@ class AuthState extends ChangeNotifier {
         // Carregar JWT e dados do backend
         final hasCredentials = await _authService.loadSavedCredentials();
         if (hasCredentials) {
-          await _loadUserData();
-          debugPrint('✅ [AuthState] Dados do usuário carregados');
+          // ✅ SEMPRE renovar JWT mesmo com credenciais salvas
+          // Isso garante que o token está válido e atualizado
+          debugPrint('🔄 [AuthState] Credenciais encontradas - renovando JWT obrigatoriamente');
+          
+          final tokenRenewed = await _authService.refreshJWT();
+          
+          if (tokenRenewed && _authService.jwtToken != null) {
+            // JWT renovado com sucesso
+            await _authService.saveCredentials(
+              currentUser.email ?? '', 
+              _authService.jwtToken!
+            );
+            await _loadUserData(skipJwtRefresh: true);
+            debugPrint('✅ [AuthState] JWT renovado e dados carregados');
+          } else {
+            // Se falhar renovação, forçar logout
+            debugPrint('❌ [AuthState] Falha ao renovar JWT - forçando logout');
+            await signOut();
+          }
         } else {
           // Firebase tem sessão mas não temos JWT salvo
-          // Vamos tentar obter novo JWT do Firebase
-          debugPrint('⚠️ [AuthState] Firebase OK mas sem JWT - obtendo novo token');
-          final idToken = await currentUser.getIdToken();
-          if (idToken != null) {
-            // Tentar trocar por JWT do backend
-            await _authService.saveCredentials(currentUser.email ?? '', idToken);
-            await _loadUserData();
+          // Vamos obter JWT do backend via Firebase token
+          debugPrint('⚠️ [AuthState] Firebase OK mas sem JWT - renovando via backend');
+          
+          // ✅ CRÍTICO: refreshJWT() faz o exchange Firebase -> Backend JWT
+          final tokenRenewed = await _authService.refreshJWT();
+          
+          if (tokenRenewed && _authService.jwtToken != null) {
+            // Salvar JWT obtido do backend
+            await _authService.saveCredentials(
+              currentUser.email ?? '', 
+              _authService.jwtToken!
+            );
+            
+            // Carregar resto dos dados (userData, restaurantData, Pusher)
+            // skipJwtRefresh=true porque já renovamos acima
+            await _loadUserData(skipJwtRefresh: true);
             debugPrint('✅ [AuthState] JWT renovado e dados carregados');
+          } else {
+            debugPrint('❌ [AuthState] Falha ao renovar JWT - forçando logout');
+            await signOut();
           }
         }
       } else {
@@ -149,6 +178,18 @@ class AuthState extends ChangeNotifier {
         
         if (_restaurantData != null) {
           debugPrint('🏪 [AuthState] restaurantData: $_restaurantData');
+        }
+        
+        // ✅ Inicializar Pusher para notificações em tempo real
+        if (_userData != null && _authService.jwtToken != null) {
+          final userId = _userData!['id'] ?? _userData!['uid'];
+          if (userId != null) {
+            debugPrint('📡 [AuthState] Inicializando Pusher após login');
+            await OrderStatusPusherService.initialize(
+              userId: userId,
+              authToken: _authService.jwtToken,
+            );
+          }
         }
         
         // 🔔 Registrar token FCM após login bem-sucedido
@@ -304,23 +345,27 @@ class AuthState extends ChangeNotifier {
   }
 
   /// 📡 Carregar dados do usuário
-  Future<void> _loadUserData() async {
+  Future<void> _loadUserData({bool skipJwtRefresh = false}) async {
     try {
-      // ✅ SEMPRE renovar o JWT ao carregar dados do usuário
-      debugPrint('🔄 [AuthState] Renovando JWT token...');
-      final tokenRenewed = await _authService.refreshJWT();
-      
-      if (!tokenRenewed) {
-        debugPrint('❌ [AuthState] Falha ao renovar token JWT');
+      // ✅ Renovar o JWT ao carregar dados (se necessário)
+      if (!skipJwtRefresh) {
+        debugPrint('🔄 [AuthState] Renovando JWT token...');
+        final tokenRenewed = await _authService.refreshJWT();
         
-        // ✅ FIX: Se já temos um token (carregado manualmente), não devemos abortar.
-        if (_authService.jwtToken != null) {
-          debugPrint('⚠️ [AuthState] Usando token JWT salvo manualmente');
+        if (!tokenRenewed) {
+          debugPrint('❌ [AuthState] Falha ao renovar token JWT');
+          
+          // ✅ FIX: Se já temos um token (carregado manualmente), não devemos abortar.
+          if (_authService.jwtToken != null) {
+            debugPrint('⚠️ [AuthState] Usando token JWT salvo manualmente');
+          } else {
+            return;
+          }
         } else {
-          return;
+          debugPrint('✅ [AuthState] JWT token renovado com sucesso');
         }
       } else {
-        debugPrint('✅ [AuthState] JWT token renovado com sucesso');
+        debugPrint('⏭️ [AuthState] Pulando renovação JWT - já foi renovado');
       }
       
       // Agora verifica se o cadastro está completo

@@ -1678,7 +1678,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                     const Divider(color: Color(0xFFE39110), height: 32),
                     _buildDrawerItem(
                       icon: Icons.restaurant_menu,
-                      title: 'Estabelecimentos',
+                      title: 'Categorias',
                       onTap: () {
                         _pauseAllVideos(); // ✅ Pausar vídeos ao navegar
                         Navigator.pop(context);

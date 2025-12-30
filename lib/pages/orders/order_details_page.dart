@@ -149,6 +149,16 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> with WidgetsBinding
       return;
     }
     
+    // 🚨 CRÍTICO: Validar authToken ANTES de inicializar Pusher
+    if (authState.jwtToken == null || authState.jwtToken!.isEmpty) {
+      debugPrint('❌ [OrderDetailsPage] JWT token ausente ou vazio - chat não disponível');
+      setState(() {
+        _error = 'Token de autenticação não disponível. Tente fazer login novamente.';
+        _isConnecting = false;
+      });
+      return;
+    }
+    
     // ✅ Obter userId do Firebase ou dos dados do usuário
     String? userId = authState.currentUser?.uid ?? authState.userData?['uid'] ?? authState.userData?['id'];
     
@@ -161,11 +171,16 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> with WidgetsBinding
     }
 
     try {
+      debugPrint('💬 [OrderDetailsPage] Iniciando ChatService.initialize...');
+      debugPrint('💬 [OrderDetailsPage] OrderId: ${widget.order.id}');
+      debugPrint('💬 [OrderDetailsPage] UserId: $userId');
+      debugPrint('💬 [OrderDetailsPage] Token presente: ${authState.jwtToken != null}');
+      
       await ChatService.initialize(
         orderId: widget.order.id,
         userId: userId, // ✅ Usar userId obtido de forma segura
         restaurantName: widget.order.restaurantName, // ✅ Passar nome do restaurante
-        authToken: authState.jwtToken, // ✅ CRÍTICO: Passar token JWT para autenticação
+        authToken: authState.jwtToken, // ✅ CRÍTICO: Passar token JWT para autenticação (já validado acima)
         onMessageReceived: (message) {
           if (!mounted) return;
           
@@ -187,23 +202,41 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> with WidgetsBinding
         },
         onError: (error) {
           if (!mounted) return;
+          debugPrint('❌ [OrderDetailsPage] Chat error callback: $error');
           setState(() {
             _error = 'Erro no chat. Tente novamente.';
           });
-          debugPrint('❌ [OrderDetailsPage] Chat error: $error');
         },
       );
+      
+      debugPrint('✅ [OrderDetailsPage] ChatService.initialize completado');
 
       if (mounted) {
         setState(() {
           _isConnecting = false;
         });
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
       debugPrint('❌ [OrderDetailsPage] Erro ao conectar chat: $e');
+      debugPrint('Stack trace: $stackTrace');
+      
+      String errorMessage = 'Erro ao conectar ao chat.';
+      
+      // Identificar tipo específico de erro
+      final errorStr = e.toString();
+      if (errorStr.contains('NullPointerException')) {
+        errorMessage = 'Erro de autenticação. Faça login novamente.';
+        debugPrint('⚠️ [OrderDetailsPage] NullPointerException - provavelmente token inválido');
+      } else if (errorStr.contains('PlatformException')) {
+        errorMessage = 'Erro no serviço de chat. Tente novamente.';
+        debugPrint('⚠️ [OrderDetailsPage] PlatformException no Pusher');
+      } else if (errorStr.contains('SocketException') || errorStr.contains('Failed host lookup')) {
+        errorMessage = 'Sem conexão com a internet.';
+      }
+      
       if (mounted) {
         setState(() {
-          _error = 'Erro ao conectar ao chat. Verifique sua conexão.';
+          _error = errorMessage;
           _isConnecting = false;
         });
       }

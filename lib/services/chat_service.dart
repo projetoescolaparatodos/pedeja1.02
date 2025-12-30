@@ -93,11 +93,16 @@ class ChatService {
     try {
       debugPrint('💬 [ChatService] Inicializando para pedido $orderId...');
       
-      // ✅ Salvar token de autenticação
-      if (authToken != null) {
-        _currentAuthToken = authToken;
-        debugPrint('💬 [ChatService] Token de autenticação salvo');
+      // 🚨 CRÍTICO: Validar authToken ANTES de qualquer operação
+      if (authToken == null || authToken.isEmpty) {
+        debugPrint('❌ [ChatService] ERRO: authToken ausente ou vazio');
+        onError?.call('Token de autenticação não disponível');
+        throw Exception('authToken é obrigatório para chat');
       }
+      
+      // ✅ Salvar token de autenticação
+      _currentAuthToken = authToken;
+      debugPrint('💬 [ChatService] Token de autenticação salvo e validado');
       
       // Salvar callbacks
       _messageCallbacks[orderId] = onMessageReceived;

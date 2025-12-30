@@ -401,11 +401,26 @@ class AuthState extends ChangeNotifier {
 
     try {
       debugPrint('🚪 [AuthState] Iniciando logout completo...');
+      debugPrint('📱 [AuthState] Platform: ${Platform.isIOS ? "iOS" : "Android"}');
       
-      // � CRÍTICO: Limpar SharedPreferences PRIMEIRO (antes de qualquer delay)
+      // 🍎 iOS CRÍTICO: Desabilitar persistência do Firebase ANTES do signOut
+      // Isso evita que o Keychain mantenha a sessão ativa
+      if (Platform.isIOS) {
+        debugPrint('🍎 [AuthState] iOS: Configurando persistência para NONE...');
+        try {
+          // Isso força o Firebase a não salvar no Keychain
+          await FirebaseAuth.instance.setPersistence(Persistence.NONE);
+          debugPrint('✅ [AuthState] Persistência Firebase desabilitada');
+        } catch (e) {
+          debugPrint('⚠️ [AuthState] Erro ao desabilitar persistência: $e');
+        }
+      }
+      
+      // 🚨 CRÍTICO: Limpar SharedPreferences PRIMEIRO (antes de qualquer delay)
       final prefs = await SharedPreferences.getInstance();
+      final keysBeforeClear = prefs.getKeys().length;
       await prefs.clear(); // Limpa TUDO
-      debugPrint('✅ [AuthState] SharedPreferences limpo (iOS fix)');
+      debugPrint('✅ [AuthState] SharedPreferences limpo: $keysBeforeClear chaves removidas');
       
       // 🔔 Limpar token FCM antes do logout
       await NotificationService.clearToken();
@@ -437,26 +452,43 @@ class AuthState extends ChangeNotifier {
         final stillLoggedIn = FirebaseAuth.instance.currentUser;
         if (stillLoggedIn != null) {
           debugPrint('❌ [AuthState] CRÍTICO: iOS ainda tem usuário! UID: ${stillLoggedIn.uid}');
+          debugPrint('❌ [AuthState] Email: ${stillLoggedIn.email}, Providers: ${stillLoggedIn.providerData.length}');
+          
+          // Forçar persistência NONE novamente
+          try {
+            await FirebaseAuth.instance.setPersistence(Persistence.NONE);
+            debugPrint('🍎 [AuthState] Persistência reforçada: NONE');
+          } catch (e) {
+            debugPrint('⚠️ [AuthState] Erro ao reforçar persistência: $e');
+          }
           
           // Forçar signOut múltiplas vezes
           for (int i = 0; i < 3; i++) {
             await FirebaseAuth.instance.signOut();
             await Future.delayed(Duration(milliseconds: 200));
             
-            if (FirebaseAuth.instance.currentUser == null) {
+            final checkUser = FirebaseAuth.instance.currentUser;
+            if (checkUser == null) {
               debugPrint('✅ [AuthState] iOS logout bem-sucedido na tentativa ${i + 1}');
               break;
+            } else {
+              debugPrint('⚠️ [AuthState] Tentativa ${i + 1}/3 - Usuário ainda presente: ${checkUser.uid}');
             }
           }
           
           // Se ainda estiver logado, forçar limpeza final
-          if (FirebaseAuth.instance.currentUser != null) {
-            debugPrint('❌ [AuthState] FALHA CRÍTICA: Forçando limpeza final...');
+          final finalCheck = FirebaseAuth.instance.currentUser;
+          if (finalCheck != null) {
+            debugPrint('❌ [AuthState] FALHA CRÍTICA após 3 tentativas!');
+            debugPrint('❌ [AuthState] Usuário teimoso: ${finalCheck.uid}');
+            
             final prefs2 = await SharedPreferences.getInstance();
             await prefs2.clear(); // Segunda limpeza (garantia)
             
             // Garantir que AuthService não tem token
             await _authService.clearCredentials();
+            
+            debugPrint('⚠️ [AuthState] Limpeza forçada aplicada - pode requerer reinício do app');
           }
         } else {
           debugPrint('✅ [AuthState] iOS logout confirmado - Firebase limpo');
@@ -464,13 +496,17 @@ class AuthState extends ChangeNotifier {
         
         // IMPORTANTE: Verificar se não tem credenciais salvas que causariam auto-login
         final prefsCheck = await SharedPreferences.getInstance();
+        final allKeys = prefsCheck.getKeys();
         final hasLoginData = prefsCheck.containsKey('isLoggedIn') || 
                              prefsCheck.containsKey('jwtToken') ||
                              prefsCheck.containsKey('userEmail');
         
+        debugPrint('🔍 [AuthState] Verificação final - Total de chaves: ${allKeys.length}');
         if (hasLoginData) {
-          debugPrint('⚠️ [AuthState] CRÍTICO: Ainda há dados de login! Limpando novamente...');
+          debugPrint('⚠️ [AuthState] CRÍTICO: Ainda há dados de login!');
+          debugPrint('⚠️ [AuthState] Chaves encontradas: ${allKeys.where((k) => k.contains('login') || k.contains('token') || k.contains('email'))}');
           await prefsCheck.clear();
+          debugPrint('🗑️ [AuthState] Limpeza adicional executada');
         } else {
           debugPrint('✅ [AuthState] Verificado: Nenhum dado de login restante');
         }

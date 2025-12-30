@@ -38,49 +38,36 @@ class AuthState extends ChangeNotifier {
 
   /// 🔄 Inicializar autenticação
   Future<void> _initAuth() async {
-    debugPrint('🔧 [AuthState] _initAuth() chamado - APENAS verificando Firebase, SEM auto-login');
+    debugPrint('🔧 [AuthState] _initAuth() chamado - verificando sessão Firebase');
     
     _isLoading = true;
     notifyListeners();
 
     try {
-      // 🚫 DESABILITADO: Não fazer auto-login automático
-      // Apenas verificar se há usuário no Firebase (persistência nativa do Firebase)
+      // Verificar se há usuário no Firebase (persistência nativa do Firebase)
       final currentUser = FirebaseAuth.instance.currentUser;
       
       if (currentUser != null) {
         debugPrint('✅ [AuthState] Usuário Firebase encontrado: ${currentUser.email}');
         
-        // 🍎 iOS: Verificar se há dados no SharedPreferences
-        // Se não houver, significa que houve logout e Firebase não limpou corretamente
-        if (Platform.isIOS) {
-          final prefs = await SharedPreferences.getInstance();
-          final hasLoginData = prefs.containsKey('isLoggedIn') || 
-                               prefs.containsKey('jwtToken');
-          
-          if (!hasLoginData) {
-            debugPrint('⚠️ [AuthState] iOS: Firebase tem usuário mas SharedPreferences está limpo');
-            debugPrint('🚪 [AuthState] Forçando logout do Firebase (limpeza de sessão órfã)');
-            await FirebaseAuth.instance.signOut();
-            await _authService.clearCredentials();
-            _currentUser = null;
-            _isLoading = false;
-            notifyListeners();
-            return;
-          }
-        }
-        
         _currentUser = currentUser;
         
-        // Carregar JWT e dados apenas se Firebase já tem sessão ativa
+        // Carregar JWT e dados do backend
         final hasCredentials = await _authService.loadSavedCredentials();
         if (hasCredentials) {
           await _loadUserData();
           debugPrint('✅ [AuthState] Dados do usuário carregados');
         } else {
-          debugPrint('⚠️ [AuthState] Firebase tem usuário mas sem credenciais salvas - logout');
-          await FirebaseAuth.instance.signOut();
-          _currentUser = null;
+          // Firebase tem sessão mas não temos JWT salvo
+          // Vamos tentar obter novo JWT do Firebase
+          debugPrint('⚠️ [AuthState] Firebase OK mas sem JWT - obtendo novo token');
+          final idToken = await currentUser.getIdToken();
+          if (idToken != null) {
+            // Tentar trocar por JWT do backend
+            await _authService.saveCredentials(currentUser.email ?? '', idToken);
+            await _loadUserData();
+            debugPrint('✅ [AuthState] JWT renovado e dados carregados');
+          }
         }
       } else {
         debugPrint('❌ [AuthState] Nenhum usuário no Firebase - usuário deslogado');

@@ -83,6 +83,9 @@ class _CompleteProfilePageState extends State<CompleteProfilePage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       debugPrint('⚡ [CompleteProfilePage] PostFrameCallback executado');
       _loadUserData();
+      
+      // ✅ Ativa GPS automaticamente
+      _useGPSLocation();
     });
   }
 
@@ -338,9 +341,6 @@ class _CompleteProfilePageState extends State<CompleteProfilePage> {
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
                     return 'Nome é obrigatório';
-                  }
-                  if (value.trim().split(' ').length < 2) {
-                    return 'Digite seu nome completo';
                   }
                   return null;
                 },

@@ -13,48 +13,19 @@ class SignupPage extends StatefulWidget {
 
 class _SignupPageState extends State<SignupPage> {
   final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController();
   final _emailController = TextEditingController();
-  final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
-  final _birthDateController = TextEditingController();
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
   bool _acceptTerms = false;
 
   @override
   void dispose() {
-    _nameController.dispose();
     _emailController.dispose();
-    _phoneController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
-    _birthDateController.dispose();
     super.dispose();
-  }
-
-  bool _validateAge(String dateStr) {
-    try {
-      final parts = dateStr.split('/');
-      if (parts.length != 3) return false;
-      
-      final day = int.parse(parts[0]);
-      final month = int.parse(parts[1]);
-      final year = int.parse(parts[2]);
-      
-      final birthDate = DateTime(year, month, day);
-      final today = DateTime.now();
-      
-      var age = today.year - birthDate.year;
-      if (today.month < birthDate.month || (today.month == birthDate.month && today.day < birthDate.day)) {
-        age -= 1;
-      }
-      
-      return age >= 16;
-    } catch (e) {
-      return false;
-    }
   }
 
   Future<void> _handleSignup() async {
@@ -77,8 +48,8 @@ class _SignupPageState extends State<SignupPage> {
     final success = await authState.signUp(
       email: _emailController.text.trim(),
       password: _passwordController.text,
-      name: _nameController.text.trim(),
-      phone: _phoneController.text.trim(),
+      name: 'Usuário', // Nome padrão
+      phone: '', // Telefone vazio
     );
 
     if (!mounted) return;
@@ -163,106 +134,6 @@ class _SignupPageState extends State<SignupPage> {
 
                 const SizedBox(height: 32),
 
-                // Name field
-                TextFormField(
-                  controller: _nameController,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: InputDecoration(
-                    labelText: 'Nome completo',
-                    labelStyle: const TextStyle(color: Colors.white70),
-                    prefixIcon: const Icon(Icons.person_outline, color: Color(0xFFE39110)),
-                    filled: true,
-                    fillColor: const Color(0xFF022E28),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: Color(0xFF1A4747)),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: Color(0xFFE39110), width: 2),
-                    ),
-                  ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Digite seu nome';
-                    }
-                    return null;
-                  },
-                ),
-
-                const SizedBox(height: 16),
-
-                // Birth date field (digitação manual)
-                TextFormField(
-                  controller: _birthDateController,
-                  keyboardType: TextInputType.datetime,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: InputDecoration(
-                    labelText: 'Data de nascimento (DD/MM/AAAA)',
-                    labelStyle: const TextStyle(color: Colors.white70),
-                    prefixIcon: const Icon(Icons.cake_outlined, color: Color(0xFFE39110)),
-                    hintText: '01/01/2000',
-                    hintStyle: const TextStyle(color: Colors.white38),
-                    filled: true,
-                    fillColor: const Color(0xFF022E28),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: Color(0xFF1A4747)),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: Color(0xFFE39110), width: 2),
-                    ),
-                  ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Digite sua data de nascimento';
-                    }
-                    
-                    // Validar formato DD/MM/AAAA
-                    final regex = RegExp(r'^\d{2}/\d{2}/\d{4}$');
-                    if (!regex.hasMatch(value)) {
-                      return 'Formato inválido. Use DD/MM/AAAA';
-                    }
-                    
-                    // Validar se a data é válida
-                    try {
-                      final parts = value.split('/');
-                      final day = int.parse(parts[0]);
-                      final month = int.parse(parts[1]);
-                      final year = int.parse(parts[2]);
-                      
-                      if (day < 1 || day > 31) return 'Dia inválido';
-                      if (month < 1 || month > 12) return 'Mês inválido';
-                      if (year < 1900 || year > DateTime.now().year) return 'Ano inválido';
-                      
-                      final birthDate = DateTime(year, month, day);
-                      if (birthDate.isAfter(DateTime.now())) {
-                        return 'Data não pode ser no futuro';
-                      }
-                    } catch (e) {
-                      return 'Data inválida';
-                    }
-                    
-                    // Validar idade mínima
-                    if (!_validateAge(value)) {
-                      return 'Você precisa ter 16 anos ou mais';
-                    }
-                    
-                    return null;
-                  },
-                ),
-
-                const SizedBox(height: 16),
-
                 // Email field
                 TextFormField(
                   controller: _emailController,
@@ -293,40 +164,6 @@ class _SignupPageState extends State<SignupPage> {
                     }
                     if (!value.contains('@')) {
                       return 'Digite um email válido';
-                    }
-                    return null;
-                  },
-                ),
-
-                const SizedBox(height: 16),
-
-                // Phone field
-                TextFormField(
-                  controller: _phoneController,
-                  keyboardType: TextInputType.phone,
-                  style: const TextStyle(color: Colors.white),
-                  decoration: InputDecoration(
-                    labelText: 'Telefone',
-                    labelStyle: const TextStyle(color: Colors.white70),
-                    prefixIcon: const Icon(Icons.phone_outlined, color: Color(0xFFE39110)),
-                    filled: true,
-                    fillColor: const Color(0xFF022E28),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: Color(0xFF1A4747)),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: Color(0xFFE39110), width: 2),
-                    ),
-                  ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Digite seu telefone';
                     }
                     return null;
                   },
@@ -497,34 +334,30 @@ class _SignupPageState extends State<SignupPage> {
                   },
                 ),
 
-                const SizedBox(height: 16),
+                const SizedBox(height: 24),
 
-                // Botão Entrar como Convidado
-                TextButton(
-                  onPressed: () {
-                    context.read<AuthState>().enterGuestMode();
-                    Navigator.pushReplacement(
-                      context,
-                      MaterialPageRoute(builder: (_) => const HomePage()),
-                    );
-                  },
-                  style: TextButton.styleFrom(
-                    foregroundColor: const Color(0xFFE39110),
-                  ),
-                  child: const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.person_outline, size: 20),
-                      SizedBox(width: 8),
-                      Text(
-                        'Entrar como convidado',
+                // Link para login
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Text(
+                      'Já tem uma conta? ',
+                      style: TextStyle(color: Colors.white70),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                      },
+                      child: const Text(
+                        'Faça login',
                         style: TextStyle(
+                          color: Color(0xFFE39110),
+                          fontWeight: FontWeight.bold,
                           fontSize: 16,
-                          fontWeight: FontWeight.w600,
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
 
                 const SizedBox(height: 16),

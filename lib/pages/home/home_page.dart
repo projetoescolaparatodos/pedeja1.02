@@ -1811,29 +1811,34 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                           // Fechar drawer IMEDIATAMENTE
                           Navigator.pop(context);
                           
-                          // Aguardar navegação completar antes de fazer logout
-                          await Future.delayed(const Duration(milliseconds: 100));
-                          
                           try {
-                            // Fazer logout
+                            // ✅ CRÍTICO: Fazer logout PRIMEIRO (e esperar completar)
+                            debugPrint('🚪 Iniciando logout...');
                             final authState = Provider.of<AuthState>(context, listen: false);
+                            await authState.signOut();
+                            debugPrint('✅ Logout completo');
                             
-                            // Navegar ANTES do logout (evita race condition no iOS)
+                            // ✅ DEPOIS navegar para tela de login
                             if (mounted) {
-                              await Navigator.of(context).pushAndRemoveUntil(
+                              Navigator.of(context).pushAndRemoveUntil(
                                 MaterialPageRoute(
                                   builder: (context) => const LoginPage(),
                                 ),
                                 (route) => false,
                               );
                             }
-                            
-                            // DEPOIS fazer logout em background
-                            authState.signOut().catchError((e) {
-                              debugPrint('❌ Erro ao fazer logout em background: $e');
-                            });
                           } catch (e) {
                             debugPrint('❌ Erro ao processar logout: $e');
+                            
+                            // Mesmo com erro, tentar ir para login
+                            if (mounted) {
+                              Navigator.of(context).pushAndRemoveUntil(
+                                MaterialPageRoute(
+                                  builder: (context) => const LoginPage(),
+                                ),
+                                (route) => false,
+                              );
+                            }
                           }
                         }
                       },

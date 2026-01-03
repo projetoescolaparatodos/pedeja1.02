@@ -489,62 +489,192 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
             ),
           ),
           const SizedBox(height: 12),
+          // Dynamic text box showing selected brand name
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             decoration: BoxDecoration(
               color: const Color(0xFF0D3B3B).withValues(alpha: 0.6),
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: const Color(0xFFE39110).withValues(alpha: 0.3),
-                width: 1,
+                color: _selectedBrand != null 
+                    ? const Color(0xFFE39110).withValues(alpha: 0.5)
+                    : const Color(0xFFE39110).withValues(alpha: 0.3),
+                width: _selectedBrand != null ? 1.5 : 1,
               ),
             ),
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<BrandVariant>(
-                value: _selectedBrand,
-                hint: const Text(
-                  'Escolha uma marca',
-                  style: TextStyle(color: Colors.white70),
-                ),
-                isExpanded: true,
-                dropdownColor: const Color(0xFF0D3B3B),
-                style: const TextStyle(color: Colors.white, fontSize: 16),
-                icon: const Icon(Icons.arrow_drop_down, color: Color(0xFFE39110)),
-                items: _brands.map((brand) {
-                  return DropdownMenuItem<BrandVariant>(
-                    value: brand,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Expanded(
-                          child: Text(
-                            brand.brandName,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w500,
+            child: Text(
+              _selectedBrand != null 
+                  ? _selectedBrand!.brandName 
+                  : 'Selecione uma marca',
+              style: TextStyle(
+                color: _selectedBrand != null ? Colors.white : Colors.white70,
+                fontSize: 16,
+                fontWeight: _selectedBrand != null ? FontWeight.w600 : FontWeight.normal,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ),
+          const SizedBox(height: 16),
+          // Horizontal carousel with brand cards
+          SizedBox(
+            height: 220,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              itemCount: _brands.length,
+              padding: const EdgeInsets.symmetric(horizontal: 0),
+              itemBuilder: (context, index) {
+                final brand = _brands[index];
+                final isSelected = _selectedBrand == brand;
+                
+                return GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _selectedBrand = brand;
+                    });
+                  },
+                  child: Container(
+                    width: 160,
+                    margin: EdgeInsets.only(
+                      right: index < _brands.length - 1 ? 12 : 0,
+                    ),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: isSelected
+                            ? const Color(0xFFE39110)
+                            : const Color(0xFFE39110).withValues(alpha: 0.3),
+                        width: isSelected ? 2 : 1,
+                      ),
+                      boxShadow: isSelected
+                          ? [
+                              BoxShadow(
+                                color: const Color(0xFFE39110).withValues(alpha: 0.4),
+                                blurRadius: 12,
+                                spreadRadius: 2,
+                              ),
+                            ]
+                          : [],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: Stack(
+                        children: [
+                          // Brand image
+                          if (brand.brandImageUrl != null && brand.brandImageUrl!.isNotEmpty)
+                            CachedNetworkImage(
+                              imageUrl: brand.brandImageUrl!,
+                              width: 160,
+                              height: 220,
+                              fit: BoxFit.cover,
+                              placeholder: (context, url) => Container(
+                                color: const Color(0xFF0D3B3B).withValues(alpha: 0.6),
+                                child: const Center(
+                                  child: CircularProgressIndicator(
+                                    color: Color(0xFFE39110),
+                                  ),
+                                ),
+                              ),
+                              errorWidget: (context, url, error) => Container(
+                                color: const Color(0xFF0D3B3B).withValues(alpha: 0.6),
+                                child: const Center(
+                                  child: Icon(
+                                    Icons.broken_image,
+                                    color: Colors.white38,
+                                    size: 48,
+                                  ),
+                                ),
+                              ),
+                            )
+                          else
+                            Container(
+                              color: const Color(0xFF0D3B3B).withValues(alpha: 0.6),
+                              child: const Center(
+                                child: Icon(
+                                  Icons.image_not_supported,
+                                  color: Colors.white38,
+                                  size: 48,
+                                ),
+                              ),
+                            ),
+                          
+                          // Gradient overlay
+                          Container(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [
+                                  Colors.transparent,
+                                  Colors.black.withValues(alpha: 0.7),
+                                ],
+                                stops: const [0.5, 1.0],
+                              ),
                             ),
                           ),
-                        ),
-                        Text(
-                          'R\$ ${brand.brandPrice.toStringAsFixed(2).replaceAll('.', ',')}',
-                          style: const TextStyle(
-                            color: Color(0xFFE39110),
-                            fontWeight: FontWeight.bold,
+                          
+                          // Price tag at bottom
+                          Positioned(
+                            bottom: 12,
+                            left: 12,
+                            right: 12,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'R\$ ${brand.brandPrice.toStringAsFixed(2).replaceAll('.', ',')}',
+                                  style: const TextStyle(
+                                    color: Color(0xFFE39110),
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                if (brand.brandStock != null && brand.brandStock! > 0)
+                                  Text(
+                                    'Estoque: ${brand.brandStock}',
+                                    style: TextStyle(
+                                      color: Colors.white.withValues(alpha: 0.8),
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                              ],
+                            ),
                           ),
-                        ),
-                      ],
+                          
+                          // Selection indicator
+                          if (isSelected)
+                            Positioned(
+                              top: 8,
+                              right: 8,
+                              child: Container(
+                                padding: const EdgeInsets.all(4),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFE39110),
+                                  shape: BoxShape.circle,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(alpha: 0.3),
+                                      blurRadius: 4,
+                                    ),
+                                  ],
+                                ),
+                                child: const Icon(
+                                  Icons.check,
+                                  color: Colors.white,
+                                  size: 20,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
-                  );
-                }).toList(),
-                onChanged: (BrandVariant? newBrand) {
-                  setState(() {
-                    _selectedBrand = newBrand;
-                  });
-                },
-              ),
+                  ),
+                );
+              },
             ),
           ),
           if (_selectedBrand != null) ...[
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
             Row(
               children: [
                 const Icon(Icons.inventory_2_outlined, color: Colors.white70, size: 16),

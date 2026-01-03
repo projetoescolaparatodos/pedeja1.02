@@ -6,6 +6,7 @@ import '../services/auth_service.dart';
 import '../services/notification_service.dart';
 import '../services/order_status_listener_service.dart';
 import '../services/order_status_pusher_service.dart';
+import '../utils/ios_logout_handler.dart';
 
 /// 🔐 Estado de Autenticação com Provider
 class AuthState extends ChangeNotifier {
@@ -444,115 +445,51 @@ class AuthState extends ChangeNotifier {
     debugPrint('🚪 [AuthState] ===== INICIANDO LOGOUT =====');
     debugPrint('📱 [AuthState] Platform: ${Platform.isIOS ? "iOS" : "Android"}');
     
-    // 🍎 iOS: Abordagem completamente diferente - NÃO tocar no Firebase
+    // 🍎 iOS: Usar IOSLogoutHandler (handler especializado)
     if (Platform.isIOS) {
-      debugPrint('🍎 [AuthState] LOGOUT iOS - Modo Seguro Ativado');
+      debugPrint('🍎 [AuthState] Usando IOSLogoutHandler');
       
-      try {
-        // PASSO 0: MARCAR COMO LOGOUT MANUAL (ANTES de limpar tudo)
-        debugPrint('0️⃣ Marcando logout manual...');
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setBool('manual_logout', true);
-        debugPrint('✅ Flag manual_logout definida');
-        
-        // PASSO 1: Limpar dados locais IMEDIATAMENTE
-        debugPrint('1️⃣ Limpando SharedPreferences...');
-        await prefs.clear();
-        // Restaurar a flag APÓS clear()
-        await prefs.setBool('manual_logout', true);
-        debugPrint('✅ SharedPreferences limpo');
-        
-        // PASSO 2: Limpar estados da aplicação
-        debugPrint('2️⃣ Limpando estados locais...');
-        _currentUser = null;
-        _userData = null;
-        _restaurantData = null;
-        _registrationComplete = false;
-        _error = null;
-        _isGuest = false;
-        _isLoading = false;
-        debugPrint('✅ Estados locais limpos');
-        
-        // PASSO 3: Limpar credenciais do AuthService (sem tocar Firebase)
-        debugPrint('3️⃣ Limpando AuthService...');
-        try {
+      final success = await IOSLogoutHandler().performLogout(
+        clearLocalState: () async {
+          // Limpar estados da aplicação
+          _currentUser = null;
+          _userData = null;
+          _restaurantData = null;
+          _registrationComplete = false;
+          _error = null;
+          _isGuest = false;
+          _isLoading = false;
+          
+          // Limpar credenciais do AuthService
           await _authService.clearCredentials();
-          debugPrint('✅ AuthService limpo');
-        } catch (e) {
-          debugPrint('⚠️ Erro AuthService (ignorando): $e');
-        }
-        
-        // PASSO 4: Desconectar serviços (Pusher, FCM, etc) - SEM AWAIT
-        debugPrint('4️⃣ Desconectando serviços...');
-        
-        // Pusher - fire and forget
-        OrderStatusPusherService.disconnect().catchError((e) {
-          debugPrint('⚠️ Pusher disconnect erro (ignorado): $e');
-        });
-        
-        // FCM - fire and forget  
-        NotificationService.clearToken().catchError((e) {
-          debugPrint('⚠️ FCM clear erro (ignorado): $e');
-        });
-        
-        // OrderStatus - fire and forget
-        OrderStatusListenerService.stopListeningToAllOrders().catchError((e) {
-          debugPrint('⚠️ OrderStatus erro (ignorado): $e');
-        });
-        OrderStatusListenerService.clearCache();
-        
-        debugPrint('✅ Serviços desconectados (async)');
-        
-        // PASSO 5: Firebase logout - ISOLADO e COM TIMEOUT
-        debugPrint('5️⃣ Tentando Firebase signOut (com timeout)...');
-        try {
-          await Future.any([
-            FirebaseAuth.instance.signOut(),
-            Future.delayed(const Duration(milliseconds: 500)),
-          ]);
-          debugPrint('✅ Firebase signOut completado ou timeout');
-        } catch (e) {
-          debugPrint('⚠️ Firebase signOut falhou (IGNORADO): $e');
-          // NÃO IMPORTA - dados locais já foram limpos!
-        }
-        
-        // PASSO 6: Notificar listeners
-        notifyListeners();
-        
-        debugPrint('✅ [AuthState] LOGOUT iOS CONCLUÍDO - App vai para tela de login');
-        debugPrint('🍎 [AuthState] Dados locais limpos = sem auto-login');
-        
-      } catch (e, stackTrace) {
-        debugPrint('❌ [AuthState] Erro crítico no logout iOS: $e');
-        debugPrint('Stack: $stackTrace');
-        
-        // GARANTIA: Limpar tudo mesmo com erro
-        try {
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.clear();
-        } catch (_) {}
-        
-        _currentUser = null;
-        _userData = null;
-        _restaurantData = null;
-        _registrationComplete = false;
-        _error = null;
-        _isGuest = false;
-        _isLoading = false;
-        notifyListeners();
+        },
+        disconnectServices: () async {
+          // Desconectar serviços (fire-and-forget)
+          await OrderStatusPusherService.disconnect();
+          await NotificationService.clearToken();
+          await OrderStatusListenerService.stopListeningToAllOrders();
+          OrderStatusListenerService.clearCache();
+        },
+      );
+      
+      if (success) {
+        debugPrint('✅ [AuthState] Logout iOS concluído com sucesso');
+      } else {
+        debugPrint('⚠️ [AuthState] Logout iOS com avisos (dados locais limpos)');
       }
       
-      return; // RETORNA AQUI - não executa código Android
+      notifyListeners();
+      return; // iOS termina aqui
     }
     
-    // 🤖 ANDROID - Mantém código original que funciona
+    // 🤖 ANDROID - Código original que funciona (NÃO MODIFICADO)
     _isLoading = true;
     notifyListeners();
 
     try {
       debugPrint('🤖 [AuthState] Logout Android...');
       
-      // Marcar logout manual
+      // Marcar logout manual (previne auto-login)
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('manual_logout', true);
       
@@ -561,7 +498,7 @@ class AuthState extends ChangeNotifier {
       await prefs.setBool('manual_logout', true);
       debugPrint('✅ SharedPreferences limpo');
       
-      // Limpar estados
+      // Limpar estados locais
       _currentUser = null;
       _userData = null;
       _restaurantData = null;

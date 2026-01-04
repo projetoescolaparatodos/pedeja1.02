@@ -272,60 +272,138 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   /// ✅ Filtrar produtos em destaque pela busca
-  List<dynamic> _filterFeaturedProducts(List<dynamic> products) {
-    if (_searchQuery.isEmpty) return products;
-    return products.where((p) {
-      final query = _searchQuery; // Já vem normalizado do TextField
+  /// Retorna Map<ProductModel, String?> onde String? é o nome da marca que deu match
+  Map<dynamic, String?> _filterFeaturedProducts(List<dynamic> products) {
+    if (_searchQuery.isEmpty) {
+      return {for (var p in products) p: null};
+    }
+    
+    final result = <dynamic, String?>{};
+    final query = _searchQuery; // Já vem normalizado do TextField
+    
+    for (var p in products) {
+      String? matchedBrandName;
       
-      // ✅ Pesquisar nos badges/tags (normalizar _ para espaço e remover acentos)
+      // 🥇 PRIORIDADE 1: Pesquisar nas marcas (brands)
+      if (p.brands != null && (p.brands as List).isNotEmpty) {
+        for (var brand in p.brands) {
+          final brandName = brand.brandName ?? '';
+          if (_normalizeText(brandName).contains(query)) {
+            matchedBrandName = brandName;
+            result[p] = matchedBrandName;
+            break; // Primeira marca que dá match
+          }
+        }
+      }
+      
+      // Se já encontrou marca, continua para próximo produto
+      if (matchedBrandName != null) continue;
+      
+      // 🥈 PRIORIDADE 2: Pesquisar em nome, descrição, categoria
       final badges = p.badges as List<dynamic>? ?? [];
       final badgesText = badges
           .map((badge) => _normalizeText(badge.toString().replaceAll('_', ' ')))
           .join(' ');
       
-      return _normalizeText(p.name ?? '').contains(query) ||
+      if (_normalizeText(p.name ?? '').contains(query) ||
           _normalizeText(p.description ?? '').contains(query) ||
           _normalizeText(p.category ?? '').contains(query) ||
-          badgesText.contains(query);
-    }).toList();
+          badgesText.contains(query)) {
+        result[p] = null; // Match no produto, mas não na marca
+      }
+    }
+    
+    return result;
   }
 
   /// ✅ Filtrar produtos de farmácia pela busca
-  List<dynamic> _filterPharmacyProducts(List<dynamic> products) {
-    if (_searchQuery.isEmpty) return products;
-    return products.where((p) {
-      final query = _searchQuery; // Já vem normalizado do TextField
+  /// Retorna Map<ProductModel, String?> onde String? é o nome da marca que deu match
+  Map<dynamic, String?> _filterPharmacyProducts(List<dynamic> products) {
+    if (_searchQuery.isEmpty) {
+      return {for (var p in products) p: null};
+    }
+    
+    final result = <dynamic, String?>{};
+    final query = _searchQuery; // Já vem normalizado do TextField
+    
+    for (var p in products) {
+      String? matchedBrandName;
       
-      // ✅ Pesquisar nos badges/tags (normalizar _ para espaço e remover acentos)
+      // 🥇 PRIORIDADE 1: Pesquisar nas marcas (brands)
+      if (p.brands != null && (p.brands as List).isNotEmpty) {
+        for (var brand in p.brands) {
+          final brandName = brand.brandName ?? '';
+          if (_normalizeText(brandName).contains(query)) {
+            matchedBrandName = brandName;
+            result[p] = matchedBrandName;
+            break; // Primeira marca que dá match
+          }
+        }
+      }
+      
+      // Se já encontrou marca, continua para próximo produto
+      if (matchedBrandName != null) continue;
+      
+      // 🥈 PRIORIDADE 2: Pesquisar em nome, descrição, categoria
       final badges = p.badges as List<dynamic>? ?? [];
       final badgesText = badges
           .map((badge) => _normalizeText(badge.toString().replaceAll('_', ' ')))
           .join(' ');
       
-      return _normalizeText(p.name ?? '').contains(query) ||
+      if (_normalizeText(p.name ?? '').contains(query) ||
           _normalizeText(p.description ?? '').contains(query) ||
           _normalizeText(p.category ?? '').contains(query) ||
-          badgesText.contains(query);
-    }).toList();
+          badgesText.contains(query)) {
+        result[p] = null; // Match no produto, mas não na marca
+      }
+    }
+    
+    return result;
   }
 
   /// ✅ Filtrar produtos de mercado pela busca
-  List<dynamic> _filterMarketProducts(List<dynamic> products) {
-    if (_searchQuery.isEmpty) return products;
-    return products.where((p) {
-      final query = _searchQuery; // Já vem normalizado do TextField
+  /// Retorna Map<ProductModel, String?> onde String? é o nome da marca que deu match
+  Map<dynamic, String?> _filterMarketProducts(List<dynamic> products) {
+    if (_searchQuery.isEmpty) {
+      return {for (var p in products) p: null};
+    }
+    
+    final result = <dynamic, String?>{};
+    final query = _searchQuery; // Já vem normalizado do TextField
+    
+    for (var p in products) {
+      String? matchedBrandName;
       
-      // ✅ Pesquisar nos badges/tags (normalizar _ para espaço e remover acentos)
+      // 🥇 PRIORIDADE 1: Pesquisar nas marcas (brands)
+      if (p.brands != null && (p.brands as List).isNotEmpty) {
+        for (var brand in p.brands) {
+          final brandName = brand.brandName ?? '';
+          if (_normalizeText(brandName).contains(query)) {
+            matchedBrandName = brandName;
+            result[p] = matchedBrandName;
+            break; // Primeira marca que dá match
+          }
+        }
+      }
+      
+      // Se já encontrou marca, continua para próximo produto
+      if (matchedBrandName != null) continue;
+      
+      // 🥈 PRIORIDADE 2: Pesquisar em nome, descrição, categoria
       final badges = p.badges as List<dynamic>? ?? [];
       final badgesText = badges
           .map((badge) => _normalizeText(badge.toString().replaceAll('_', ' ')))
           .join(' ');
       
-      return _normalizeText(p.name ?? '').contains(query) ||
+      if (_normalizeText(p.name ?? '').contains(query) ||
           _normalizeText(p.description ?? '').contains(query) ||
           _normalizeText(p.category ?? '').contains(query) ||
-          badgesText.contains(query);
-    }).toList();
+          badgesText.contains(query)) {
+        result[p] = null; // Match no produto, mas não na marca
+      }
+    }
+    
+    return result;
   }
 
   /// Scroll suave para o topo da página
@@ -724,16 +802,20 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         // Usa a nova lista de produtos em destaque
         final featuredProducts = catalog.featuredProducts;
 
-        // ✅ Aplica filtro de busca
-        final searchFilteredProducts = _filterFeaturedProducts(featuredProducts);
+        // ✅ Aplica filtro de busca - agora retorna Map<Product, String?>
+        final searchFilteredMap = _filterFeaturedProducts(featuredProducts);
 
         // Aplica filtro de categoria selecionada
-        final filteredProducts = catalog.selectedCategory == 'Todos'
-            ? searchFilteredProducts
-            : searchFilteredProducts.where((p) => p.category == catalog.selectedCategory).toList();
+        final filteredMap = catalog.selectedCategory == 'Todos'
+            ? searchFilteredMap
+            : Map.fromEntries(
+                searchFilteredMap.entries.where(
+                  (entry) => entry.key.category == catalog.selectedCategory
+                )
+              );
 
         // Se busca ativa e nenhum resultado, esconde a seção
-        if (_searchQuery.isNotEmpty && filteredProducts.isEmpty) {
+        if (_searchQuery.isNotEmpty && filteredMap.isEmpty) {
           return const SizedBox.shrink();
         }
 
@@ -847,7 +929,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               )
             
             // Carrossel de produtos em destaque
-            else if (filteredProducts.isEmpty)
+            else if (filteredMap.isEmpty)
               Center(
                 child: Padding(
                   padding: const EdgeInsets.all(32),
@@ -871,7 +953,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 ),
               )
             else
-              _buildProductCarousel(filteredProducts, catalog),
+              _buildProductCarousel(filteredMap, catalog),
           ],
         );
       },
@@ -884,16 +966,20 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         // Usa a nova lista de produtos de farmácia
         final pharmacyProducts = catalog.pharmacyProducts;
 
-        // ✅ Aplica filtro de busca
-        final searchFilteredProducts = _filterPharmacyProducts(pharmacyProducts);
+        // ✅ Aplica filtro de busca - agora retorna Map<Product, String?>
+        final searchFilteredMap = _filterPharmacyProducts(pharmacyProducts);
 
         // Aplica filtro de categoria selecionada
-        final filteredProducts = catalog.selectedCategory == 'Todos'
-            ? searchFilteredProducts
-            : searchFilteredProducts.where((p) => p.category == catalog.selectedCategory).toList();
+        final filteredMap = catalog.selectedCategory == 'Todos'
+            ? searchFilteredMap
+            : Map.fromEntries(
+                searchFilteredMap.entries.where(
+                  (entry) => entry.key.category == catalog.selectedCategory
+                )
+              );
 
         // Se busca ativa e nenhum resultado, esconde a seção
-        if (_searchQuery.isNotEmpty && filteredProducts.isEmpty) {
+        if (_searchQuery.isNotEmpty && filteredMap.isEmpty) {
           return const SizedBox.shrink();
         }
 
@@ -1013,7 +1099,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               )
             
             // Carrossel de produtos de farmácia
-            else if (filteredProducts.isEmpty)
+            else if (filteredMap.isEmpty)
               Center(
                 child: Padding(
                   padding: const EdgeInsets.all(32),
@@ -1037,7 +1123,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 ),
               )
             else
-              _buildProductCarousel(filteredProducts, catalog),
+              _buildProductCarousel(filteredMap, catalog),
           ],
         );
       },
@@ -1050,16 +1136,20 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         // Usa a nova lista de produtos de mercado
         final marketProducts = catalog.marketProducts;
 
-        // ✅ Aplica filtro de busca
-        final searchFilteredProducts = _filterMarketProducts(marketProducts);
+        // ✅ Aplica filtro de busca - agora retorna Map<Product, String?>
+        final searchFilteredMap = _filterMarketProducts(marketProducts);
 
         // Aplica filtro de categoria selecionada
-        final filteredProducts = catalog.selectedCategory == 'Todos'
-            ? searchFilteredProducts
-            : searchFilteredProducts.where((p) => p.category == catalog.selectedCategory).toList();
+        final filteredMap = catalog.selectedCategory == 'Todos'
+            ? searchFilteredMap
+            : Map.fromEntries(
+                searchFilteredMap.entries.where(
+                  (entry) => entry.key.category == catalog.selectedCategory
+                )
+              );
 
         // Se busca ativa e nenhum resultado, esconde a seção
-        if (_searchQuery.isNotEmpty && filteredProducts.isEmpty) {
+        if (_searchQuery.isNotEmpty && filteredMap.isEmpty) {
           return const SizedBox.shrink();
         }
 
@@ -1179,7 +1269,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               )
             
             // Carrossel de produtos de mercado
-            else if (filteredProducts.isEmpty)
+            else if (filteredMap.isEmpty)
               Center(
                 child: Padding(
                   padding: const EdgeInsets.all(32),
@@ -1203,7 +1293,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 ),
               )
             else
-              _buildProductCarousel(filteredProducts, catalog),
+              _buildProductCarousel(filteredMap, catalog),
           ],
         );
       },
@@ -1211,9 +1301,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   /// Carrossel de produtos com 6 produtos por página (2 colunas x 3 linhas)
-  Widget _buildProductCarousel(List<dynamic> products, CatalogProvider catalog) {
+  /// Agora recebe Map<dynamic, String?> onde String? é o nome da marca que deu match
+  Widget _buildProductCarousel(Map<dynamic, String?> productsMap, CatalogProvider catalog) {
     const int productsPerPage = 6; // 2 colunas x 3 linhas
-    final int totalPages = (products.length / productsPerPage).ceil();
+    
+    // Converte Map para List para facilitar paginação
+    final productEntries = productsMap.entries.toList();
+    final int totalPages = (productEntries.length / productsPerPage).ceil();
     
     // Se tiver poucos produtos (até 6), mostra grid normal sem carrossel
     if (totalPages <= 1) {
@@ -1228,9 +1322,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             mainAxisSpacing: 16,
             childAspectRatio: 0.75,
           ),
-          itemCount: products.length,
+          itemCount: productEntries.length,
           itemBuilder: (context, index) {
-            final product = products[index];
+            final entry = productEntries[index];
+            final product = entry.key;
+            final brandName = entry.value; // Nome da marca que deu match (ou null)
             final restaurantName = catalog.getRestaurantName(product.restaurantId);
             
             final restaurant = catalog.restaurants.firstWhere(
@@ -1248,6 +1344,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               child: ProductCard(
                 product: product,
                 restaurantName: restaurantName,
+                displayName: brandName, // ✅ Passa nome da marca se houver match
                 hero: true,
                 heroTag: 'product_${product.id}',
                 isRestaurantOpen: restaurant.isOpen,
@@ -1269,12 +1366,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
 
     // Cria páginas com até 6 produtos cada
-    final List<List<dynamic>> pages = [];
-    for (int i = 0; i < products.length; i += productsPerPage) {
-      final end = (i + productsPerPage < products.length) 
+    final List<List<MapEntry<dynamic, String?>>> pages = [];
+    for (int i = 0; i < productEntries.length; i += productsPerPage) {
+      final end = (i + productsPerPage < productEntries.length) 
           ? i + productsPerPage 
-          : products.length;
-      pages.add(products.sublist(i, end));
+          : productEntries.length;
+      pages.add(productEntries.sublist(i, end));
     }
 
     return StatefulBuilder(
@@ -1293,7 +1390,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   });
                 },
                 itemBuilder: (context, pageIndex) {
-                  final pageProducts = pages[pageIndex];
+                  final pageEntries = pages[pageIndex];
                   
                   return Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -1305,9 +1402,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         mainAxisSpacing: 16,
                         childAspectRatio: 0.75,
                       ),
-                      itemCount: pageProducts.length,
+                      itemCount: pageEntries.length,
                       itemBuilder: (context, index) {
-                        final product = pageProducts[index];
+                        final entry = pageEntries[index];
+                        final product = entry.key;
+                        final brandName = entry.value; // Nome da marca que deu match (ou null)
                         final restaurantName = catalog.getRestaurantName(product.restaurantId);
                         
                         final restaurant = catalog.restaurants.firstWhere(
@@ -1325,6 +1424,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                           child: ProductCard(
                             product: product,
                             restaurantName: restaurantName,
+                            displayName: brandName, // ✅ Passa nome da marca se houver match
                             hero: true,
                             heroTag: 'product_page${pageIndex}_${product.id}',
                             isRestaurantOpen: restaurant.isOpen,

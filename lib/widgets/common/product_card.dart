@@ -9,6 +9,7 @@ import '../../pages/product/product_detail_page.dart';
 class ProductCard extends StatelessWidget {
   final ProductModel product;
   final String? restaurantName; // Nome do restaurante (badge superior)
+  final String? displayName; // ✅ Nome para exibir (marca ou nome do produto)
   final VoidCallback? onTap;
   final bool hero;
   final String? heroTag;
@@ -18,6 +19,7 @@ class ProductCard extends StatelessWidget {
     super.key,
     required this.product,
     this.restaurantName,
+    this.displayName, // ✅ Opcional - se null, usa product.name
     this.onTap,
     this.hero = false,
     this.heroTag,
@@ -180,9 +182,9 @@ class ProductCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // TÍTULO
+                  // TÍTULO - Exibe displayName (marca) se disponível, senão product.name
                   Text(
-                    product.name,
+                    displayName ?? product.name,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(

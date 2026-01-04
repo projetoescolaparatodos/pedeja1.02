@@ -36,13 +36,24 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   }
 
   Future<void> _loadProductData() async {
+    print('📦 [PRODUCT DETAIL] Iniciando carregamento de dados');
+    print('📦 [PRODUCT DETAIL] Restaurant ID: ${widget.product.restaurantId}');
+    print('📦 [PRODUCT DETAIL] Product ID: ${widget.product.id}');
+    
     try {
       final url =
           'https://api-pedeja.vercel.app/api/restaurants/${widget.product.restaurantId}/products';
+      
+      print('📦 [PRODUCT DETAIL] Chamando: $url');
+      
       final response = await http.get(Uri.parse(url));
+
+      print('📦 [PRODUCT DETAIL] Status: ${response.statusCode}');
 
       if (response.statusCode == 200) {
         final List<dynamic> products = json.decode(response.body);
+        
+        print('📦 [PRODUCT DETAIL] Recebeu ${products.length} produtos');
 
         final productData = products.firstWhere(
           (p) => p['id'] == widget.product.id,
@@ -50,13 +61,21 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
         );
 
         if (productData != null) {
+          print('📦 [PRODUCT DETAIL] Produto encontrado!');
+          print('📦 [PRODUCT DETAIL] hasMultipleBrands: ${productData['hasMultipleBrands']}');
+          print('📦 [PRODUCT DETAIL] brands: ${productData['brands']?.length ?? 0}');
+          
           setState(() {
             _productData = productData as Map<String, dynamic>;
             _isLoading = false;
           });
+        } else {
+          print('❌ [PRODUCT DETAIL] Produto não encontrado na lista');
+          setState(() => _isLoading = false);
         }
       }
     } catch (e) {
+      print('❌ [PRODUCT DETAIL] Erro: $e');
       setState(() => _isLoading = false);
     }
   }
@@ -106,6 +125,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
             imageUrl: product.displayImage,
             restaurantId: product.restaurantId,
             restaurantName: product.restaurantName ?? 'Restaurante',
+            hasMultipleBrands: product.hasMultipleBrands,
           );
           
           // Feedback de sucesso
@@ -964,6 +984,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                         restaurantId: widget.product.restaurantId,
                         restaurantName: widget.product.restaurantName ?? 'Restaurante',
                         brandName: _selectedBrand?.brandName,
+                        hasMultipleBrands: widget.product.hasMultipleBrands,
                       );
                     }
 

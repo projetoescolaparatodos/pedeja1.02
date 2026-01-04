@@ -1,7 +1,7 @@
 # 📱 PedeJá - Documentação Completa do Projeto
 
 > **Última Atualização**: 04 de Janeiro de 2026  
-> **Versão Atual**: 1.0.34+34  
+> **Versão Atual**: 1.0.35+35  
 > **Status**: Em Produção
 
 ## 📋 Índice
@@ -459,7 +459,44 @@ CachedNetworkImage(
 
 ## � Changelog - Janeiro 2026
 
-### � v1.0.34+34 - Sistema de Sugestões de Produtos (04/01/2026)
+### 🔧 v1.0.35+35 - Correções Multi-Marca + Nova Splash (04/01/2026)
+
+**Correções Críticas**:
+
+1. **Fix Sugestões Multi-Marca** (`lib/widgets/suggestions/product_suggestions_bottom_sheet.dart`):
+   - ❌ Problema: Produtos com múltiplas marcas adicionados sem marca selecionada
+   - ✅ Solução: Busca dados completos antes de adicionar/redirecionar
+   - ✅ Endpoint: `/api/restaurants/{restaurantId}/products/{productId}`
+
+2. **Botão "Escolher Marca"** (`lib/pages/cart/cart_page.dart`):
+   - ✅ Aparece quando: `hasMultipleBrands == true` E `brandName == null`
+   - ✅ Visual: Fundo vermelho translúcido, ícone ⚠️, texto "Escolher marca"
+   - ✅ Ação: Remove item → busca produto completo → abre página de detalhes
+
+3. **CartItem Model** (`lib/models/cart_item.dart`):
+   - ✅ Novo campo: `hasMultipleBrands: bool`
+   - ✅ Propagação em todos `cart.addItem()` do app
+
+**Melhorias Visuais**:
+
+4. **Nova Splash Screen**:
+   - ✅ Imagem: `nova splash.png`
+   - ✅ Timeout: 3 segundos máximo
+   - ✅ iOS: `scaleAspectFit` (não corta/estica)
+
+5. **Novo Ícone**: `logo ano novo.png` (Android + iOS)
+
+**Arquivos Modificados**: 8 arquivos
+- Models: cart_item.dart
+- State: cart_state.dart
+- Pages: cart_page.dart, product_detail_page.dart, splash_video_page.dart
+- Widgets: product_suggestions_bottom_sheet.dart
+- Config: pubspec.yaml
+- Assets: nova splash.png, logo ano novo.png
+
+---
+
+### 🎯 v1.0.34+34 - Sistema de Sugestões de Produtos (04/01/2026)
 
 **Problema**: Falta de mecanismo para sugerir produtos complementares aos clientes durante a compra, reduzindo oportunidades de upsell.
 

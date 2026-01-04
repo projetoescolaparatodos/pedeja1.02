@@ -5,9 +5,11 @@ import '../../state/cart_state.dart';
 import '../../state/auth_state.dart';
 import '../../models/cart_item.dart';
 import '../../models/restaurant_model.dart';
+import '../../models/product_model.dart';
 import '../profile/complete_profile_page.dart';
 import '../checkout/multi_order_coordinator_page.dart';
 import '../checkout/payment_method_page.dart';
+import '../product/product_detail_page.dart';
 import '../auth/signup_page.dart';
 import '../auth/login_page.dart';
 import 'package:http/http.dart' as http;
@@ -421,6 +423,12 @@ class CartPage extends StatelessWidget {
                     ),
                   ),
 
+                  // ⚠️ BOTÃO "ESCOLHER MARCA" (para produtos multi-marca sem marca selecionada)
+                  if (item.hasMultipleBrands && item.brandName == null) ...[
+                    const SizedBox(height: 8),
+                    _buildChooseBrandButton(context, item),
+                  ],
+
                   const SizedBox(height: 8),
 
                   // ➕➖ CONTROLES DE QUANTIDADE
@@ -497,6 +505,89 @@ class CartPage extends StatelessWidget {
                     ],
                   ),
                 ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ⚠️ BOTÃO "ESCOLHER MARCA" (para produtos multi-marca sem marca)
+  Widget _buildChooseBrandButton(BuildContext context, CartItem item) {
+    return InkWell(
+      onTap: () async {
+        print('🔘 [ESCOLHER MARCA] Botão clicado para: ${item.name}');
+        
+        try {
+          // Buscar dados completos do restaurante para pegar o produto com marcas
+          final url = 'https://api-pedeja.vercel.app/api/restaurants/${item.restaurantId}/products';
+          print('🔘 [ESCOLHER MARCA] Buscando em: $url');
+          
+          final response = await http.get(Uri.parse(url));
+          
+          if (response.statusCode == 200) {
+            final List<dynamic> products = json.decode(response.body);
+            final productData = products.firstWhere(
+              (p) => p['id'] == item.id,
+              orElse: () => null,
+            );
+            
+            if (productData != null) {
+              // Criar ProductModel completo a partir dos dados da API
+              final product = ProductModel.fromJson(productData);
+              
+              print('🔘 [ESCOLHER MARCA] Produto carregado: ${product.name}');
+              print('🔘 [ESCOLHER MARCA] hasMultipleBrands: ${product.hasMultipleBrands}');
+              print('🔘 [ESCOLHER MARCA] brands: ${product.brands.length}');
+              
+              // Remove o item atual do carrinho
+              final cart = Provider.of<CartState>(context, listen: false);
+              cart.removeItem(item.id);
+              
+              // Abre página de detalhes do produto COM DADOS COMPLETOS
+              if (context.mounted) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => ProductDetailPage(product: product),
+                  ),
+                );
+              }
+              return;
+            }
+          }
+          
+          print('❌ [ESCOLHER MARCA] Não foi possível carregar o produto');
+        } catch (e) {
+          print('❌ [ESCOLHER MARCA] Erro: $e');
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: const Color(0xFF74241F).withOpacity(0.2),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: const Color(0xFFFF5722),
+            width: 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: const [
+            Icon(
+              Icons.warning_amber_rounded,
+              color: Color(0xFFFF5722),
+              size: 16,
+            ),
+            SizedBox(width: 6),
+            Text(
+              'Escolher marca',
+              style: TextStyle(
+                fontSize: 12,
+                color: Color(0xFFFF5722),
+                fontWeight: FontWeight.w600,
               ),
             ),
           ],

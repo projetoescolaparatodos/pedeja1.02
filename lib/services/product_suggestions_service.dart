@@ -45,6 +45,11 @@ class ProductSuggestionsService {
           
           print('🎯 [SUGGESTIONS] Recebeu ${suggestionsJson.length} produtos');
           
+          // DEBUG: Ver primeiro produto
+          if (suggestionsJson.isNotEmpty) {
+            print('🎯 [SUGGESTIONS DEBUG] Primeiro produto: ${jsonEncode(suggestionsJson[0])}');
+          }
+          
           return suggestionsJson
               .map((json) => ProductModel.fromJson(json))
               .toList();

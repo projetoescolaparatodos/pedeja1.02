@@ -33,6 +33,7 @@ class CartState extends ChangeNotifier {
     required String restaurantId,
     String? restaurantName,
     String? brandName,
+    bool hasMultipleBrands = false,
   }) {
     // Verifica se já existe no carrinho
     final existingIndex = _items.indexWhere((item) => 
@@ -55,7 +56,10 @@ class CartState extends ChangeNotifier {
         imageUrl: imageUrl,
         addons: addons,
         restaurantId: restaurantId,
-        restaurantName: restaurantName,        brandName: brandName,      ));
+        restaurantName: restaurantName,
+        brandName: brandName,
+        hasMultipleBrands: hasMultipleBrands,
+      ));
     }
 
     notifyListeners();

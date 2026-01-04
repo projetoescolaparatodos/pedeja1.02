@@ -38,6 +38,16 @@ class _SplashVideoPageState extends State<SplashVideoPage> with SingleTickerProv
       parent: _fadeController,
       curve: Curves.easeInOut,
     );
+    
+    // ⏱️ TIMEOUT: Máximo 3 segundos na splash
+    Future.delayed(const Duration(seconds: 3), () {
+      if (!_navigated && mounted) {
+        _navigated = true;
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => widget.nextPage),
+        );
+      }
+    });
   }
 
   void _videoListener() {

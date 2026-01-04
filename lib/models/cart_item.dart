@@ -8,6 +8,7 @@ class CartItem {
   final String restaurantId;    // ID do restaurante (importante!)
   final String? restaurantName; // Nome do restaurante
   final String? brandName;      // Nome da marca (para produtos com variantes)
+  final bool hasMultipleBrands; // Se o produto tem múltiplas marcas
 
   CartItem({
     required this.id,
@@ -19,6 +20,7 @@ class CartItem {
     required this.restaurantId,
     this.restaurantName,
     this.brandName,
+    this.hasMultipleBrands = false,
   });
 
   // 💰 Calcula preço dos adicionais
@@ -51,6 +53,7 @@ class CartItem {
       restaurantId: restaurantId,
       restaurantName: restaurantName,
       brandName: brandName,
+      hasMultipleBrands: hasMultipleBrands,
     );
   }
 

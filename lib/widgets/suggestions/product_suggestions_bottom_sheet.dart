@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
 import '../../models/product_model.dart';
 import 'product_suggestion_card.dart';
+import '../../pages/product/product_detail_page.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
 /// Bottom Sheet que exibe sugestões de produtos após adicionar item ao carrinho
 /// 
 /// Features:
 /// - Mostra até 3 produtos relacionados
-/// - Auto-fecha após 8 segundos
+/// - Auto-fecha após 10 segundos
 /// - Permite adicionar produtos ao carrinho
 /// - Design compacto e atraente
+/// - Abre detalhes para produtos multi-marca
 class ProductSuggestionsBottomSheet extends StatefulWidget {
   final List<ProductModel> suggestions;
   final Function(ProductModel) onAddToCart;
@@ -128,12 +132,52 @@ class _ProductSuggestionsBottomSheetState
                   final product = widget.suggestions[index];
                   return ProductSuggestionCard(
                     product: product,
-                    onAddToCart: () {
-                      // Adicionar ao carrinho
+                    onAddToCart: () async {
+                      print('🎯 [SUGGESTION CLICK] Produto: ${product.name}');
+                      
+                      // Buscar dados completos do produto (API de sugestões não retorna marcas)
+                      try {
+                        print('🔍 [FETCH PRODUCT] Restaurant ID: ${product.restaurantId}');
+                        print('🔍 [FETCH PRODUCT] Product ID: ${product.id}');
+                        
+                        final response = await http.get(
+                          Uri.parse('https://api-pedeja.vercel.app/api/restaurants/${product.restaurantId}/products/${product.id}'),
+                        );
+                        
+                        if (response.statusCode == 200) {
+                          final productData = json.decode(response.body);
+                          final fullProduct = ProductModel.fromJson(productData);
+                          
+                          print('🎯 [SUGGESTION CLICK] Dados completos - hasMultipleBrands: ${fullProduct.hasMultipleBrands}');
+                          print('🎯 [SUGGESTION CLICK] Dados completos - brands.length: ${fullProduct.brands.length}');
+                          
+                          // Se produto tem múltiplas marcas, abre página de detalhes
+                          if (fullProduct.hasMultipleBrands && fullProduct.brands.isNotEmpty) {
+                            print('🎯 [SUGGESTION CLICK] Redirecionando para página de detalhes');
+                            if (mounted) {
+                              Navigator.of(context).pop(); // Fecha o bottom sheet
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => ProductDetailPage(product: fullProduct),
+                                ),
+                              );
+                            }
+                            return;
+                          }
+                        }
+                      } catch (e) {
+                        print('❌ [SUGGESTION CLICK] Erro ao buscar produto completo: $e');
+                      }
+                      
+                      print('🎯 [SUGGESTION CLICK] Adicionando direto ao carrinho');
+                      // Se produto simples, adiciona direto ao carrinho
                       widget.onAddToCart(product);
                       
-                      // Fechar bottom sheet
-                      Navigator.of(context).pop();
+                      // Fechar bottom sheet (só se ainda montado)
+                      if (mounted) {
+                        Navigator.of(context).pop();
+                      }
                     },
                   );
                 },

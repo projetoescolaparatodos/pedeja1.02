@@ -1,7 +1,7 @@
 ﻿name: pedeja_clean
 description: PedeJá - App de delivery limpo e otimizado
 publish_to: 'none'
-version: 1.0.34+34
+version: 1.0.35+35
 
 environment:
   sdk: ">=3.0.0 <4.0.0"
@@ -75,11 +75,11 @@ flutter_icons:
   android: true
   ios: true
   remove_alpha_ios: true
-  image_path: "assets/images/splash.png"
+  image_path: "assets/images/logo ano novo.png"
 
 flutter_native_splash:
   # Logo do PedeJá centralizada em fundo laranja
-  image: assets/images/splash1.png
+  image: assets/images/nova splash.png
   
   # ✅ Cor de fundo LARANJA (cor do app)
   color: "#E39110"
@@ -88,19 +88,21 @@ flutter_native_splash:
   fullscreen: true
   
   # ✅ Imagem centralizada (logo fica melhor centralizada)
-  image_dark: assets/images/splash1.png
+  image_dark: assets/images/nova splash.png
   color_dark: "#E39110"
   
-  # Android - centralizar a logo
+  # Android - centralizar a logo e NÃO esticar
   android: true
   android_gravity: center
+  
+  # Android 12+ - manter proporções originais
   android_12:
-    image: assets/images/splash1.png
+    image: assets/images/nova splash.png
     color: "#E39110"
-    image_dark: assets/images/splash1.png
+    image_dark: assets/images/nova splash.png
     color_dark: "#E39110"
   
-  # iOS
+  # iOS - CRÍTICO: manter proporções para não cortar/esticar
   ios: true
   ios_content_mode: scaleAspectFit
   

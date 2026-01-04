@@ -16,6 +16,7 @@ class ProductModel {
   final List<Addon> addons;
   final bool hasMultipleBrands;
   final List<BrandVariant> brands;
+  final List<String> suggestedWith; // IDs dos produtos sugeridos
 
   ProductModel({
     required this.id,
@@ -32,6 +33,7 @@ class ProductModel {
     this.addons = const [],
     this.hasMultipleBrands = false,
     this.brands = const [],
+    this.suggestedWith = const [],
   });
 
   /// Converte JSON da API para ProductModel
@@ -66,6 +68,11 @@ class ProductModel {
       hasMultipleBrands: json['hasMultipleBrands'] ?? false,
       brands: (json['brands'] as List<dynamic>?)
           ?.map((b) => BrandVariant.fromJson(b as Map<String, dynamic>))
+          .toList() ?? [],
+      
+      // Produtos sugeridos (IDs)
+      suggestedWith: (json['suggestedWith'] as List<dynamic>?)
+          ?.map((e) => e.toString())
           .toList() ?? [],
     );
   }

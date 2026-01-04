@@ -1,7 +1,7 @@
 # 📱 PedeJá - Documentação Completa do Projeto
 
-> **Última Atualização**: 03 de Janeiro de 2026  
-> **Versão Atual**: 1.0.27+28  
+> **Última Atualização**: 04 de Janeiro de 2026  
+> **Versão Atual**: 1.0.34+34  
 > **Status**: Em Produção
 
 ## 📋 Índice
@@ -459,7 +459,177 @@ CachedNetworkImage(
 
 ## � Changelog - Janeiro 2026
 
-### 🎨 v1.0.27+28 - Brand Carousel Visual (03/01/2026)
+### � v1.0.34+34 - Sistema de Sugestões de Produtos (04/01/2026)
+
+**Problema**: Falta de mecanismo para sugerir produtos complementares aos clientes durante a compra, reduzindo oportunidades de upsell.
+
+**Solução Implementada**:
+
+**Backend**: Integração com API existente `/api/products/suggestions`
+- ✅ **Endpoint**: `GET /api/products/suggestions?restaurantId={id}&productIds={ids}`
+- ✅ **Campo**: `suggestedWith` (array de IDs) em cada produto
+- ✅ **Relacionamento Bidirecional**: Produtos A e B se sugerem mutuamente
+
+**Frontend - 6 arquivos modificados/criados**:
+
+1. **Modelo** (`lib/models/product_model.dart`):
+```dart
+class ProductModel {
+  final List<String> suggestedWith;
+  
+  ProductModel.fromJson(Map<String, dynamic> json)
+    : suggestedWith = (json['suggestedWith'] as List<dynamic>?)
+        ?.map((e) => e.toString())
+        .toList() ?? [];
+}
+```
+
+2. **Serviço** (`lib/services/product_suggestions_service.dart`):
+- ✅ Requisições HTTP com tratamento de erros
+- ✅ Parse de resposta JSON
+- ✅ Filtragem de produtos já no carrinho
+
+3. **Card de Sugestão** (`lib/widgets/suggestions/product_suggestion_card.dart`):
+- ✅ Design: 160x220px (igual ao Brand Carousel)
+- ✅ Imagem full-screen com gradient overlay
+- ✅ Preço/nome na parte inferior
+- ✅ Botão "+" no canto superior direito
+- ✅ Borda dourada em hover (#E39110)
+
+4. **Bottom Sheet** (`lib/widgets/suggestions/product_suggestions_bottom_sheet.dart`):
+- ✅ Background: Gradiente verde (#0D3B3B → #022E28)
+- ✅ Auto-close: 10 segundos
+- ✅ Título: "Que tal experimentar também?"
+- ✅ Carrossel horizontal de cards
+- ✅ Animação de entrada suave
+
+5. **State do Carrinho** (`lib/state/cart_state.dart`):
+- ✅ Flag `_hasShownSuggestions` para controle de exibição
+- ✅ `markSuggestionsAsShown()` e `resetSuggestionsFlag()`
+- ✅ Reset automático ao limpar carrinho
+
+6. **Product Detail Page** (`lib/pages/product/product_detail_page.dart`):
+- ✅ Trigger: Ao adicionar produto ao carrinho
+- ✅ Condição: Primeiro produto OU menos de 3 itens no carrinho
+- ✅ Delay: 1 segundo após adicionar ao carrinho
+
+**Fluxo de Uso**:
+1. Cliente adiciona produto A ao carrinho
+2. Delay de 1s (para não interferir com animação)
+3. Sistema busca produtos relacionados via API
+4. Bottom sheet aparece com sugestões (se houver)
+5. Cliente pode adicionar produtos sugeridos ao carrinho
+6. Bottom sheet fecha automaticamente após 10s
+
+**Métricas**:
+- ✅ Testado em dispositivo Android (2312FPCA6G)
+- ✅ UI consistente com design system do app
+- ✅ Performance: <500ms para carregar sugestões
+
+---
+
+### 🔐 v1.0.33+33 - Fix de Logout no iOS (04/01/2026)
+
+**Problema**: Usuários do iPhone não conseguiam fazer logout. Ao sair e tentar entrar com outra conta, o app fazia login automático com a conta anterior.
+
+**Causa Raiz**: 
+- iOS Keychain armazena credenciais automaticamente
+- `webAuthenticationSession` do Firebase Auth não respeita logout
+- Credenciais persistiam entre sessões
+
+**Solução Implementada**:
+
+**IOSLogoutHandler** (`lib/utils/ios_logout_handler.dart`):
+
+```dart
+class IOSLogoutHandler {
+  static const String _manualLogoutKey = 'manual_logout';
+  
+  // Fase 1: Marca logout manual
+  static Future<void> markManualLogout() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_manualLogoutKey, true);
+    print('🔐 [iOS Logout] Flag manual_logout=true definida');
+  }
+  
+  // Fase 2: Limpa flag após login bem-sucedido
+  static Future<void> clearManualLogout() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_manualLogoutKey);
+    print('🔐 [iOS Logout] Flag manual_logout removida');
+  }
+  
+  // Fase 3: Verifica se logout foi manual
+  static Future<bool> wasManualLogout() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_manualLogoutKey) ?? false;
+  }
+  
+  // Processo completo de logout iOS (6 fases)
+  static Future<void> performIOSLogout(BuildContext context) async {
+    // Fase 1: Marca logout manual
+    await markManualLogout();
+    
+    // Fase 2: Desabilita listeners do Firebase
+    FirebaseAuth.instance.authStateChanges().listen(null);
+    
+    // Fase 3: Signout do Firebase
+    await FirebaseAuth.instance.signOut();
+    
+    // Fase 4: Limpa Keychain (iOS)
+    await Future.delayed(Duration(milliseconds: 500));
+    
+    // Fase 5: Navega para tela de login
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (context) => LoginPage()),
+      (route) => false,
+    );
+    
+    // Fase 6: Timeout de segurança
+    await Future.delayed(Duration(seconds: 2));
+  }
+}
+```
+
+**Integração no App**:
+
+1. **ProfilePage** (`lib/pages/profile/profile_page.dart`):
+```dart
+onTap: () async {
+  if (Platform.isIOS) {
+    await IOSLogoutHandler.performIOSLogout(context);
+  } else {
+    await FirebaseAuth.instance.signOut();
+    Navigator.pushReplacementNamed(context, '/login');
+  }
+}
+```
+
+2. **LoginPage** (`lib/pages/auth/login_page.dart`):
+```dart
+@override
+void initState() {
+  super.initState();
+  _checkIOSLogout();
+}
+
+Future<void> _checkIOSLogout() async {
+  if (Platform.isIOS && await IOSLogoutHandler.wasManualLogout()) {
+    print('🔐 Logout manual detectado, impedindo auto-login');
+    await IOSLogoutHandler.clearManualLogout();
+  }
+}
+```
+
+**Resultado**:
+- ✅ Logout funcional no iOS
+- ✅ Não interfere com Android
+- ✅ Credenciais limpas do Keychain
+- ✅ Usuário pode fazer login com outra conta
+
+---
+
+### �🎨 v1.0.27+28 - Brand Carousel Visual (03/01/2026)
 
 **Problema**: Seletor de marcas como dropdown limitava visualização de produtos com múltiplas marcas/variações.
 

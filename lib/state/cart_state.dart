@@ -5,9 +5,11 @@ class CartState extends ChangeNotifier {
   final List<CartItem> _items = [];
   bool _isLoading = false;
   String? _error;
+  bool _hasShownSuggestions = false; // Controle para mostrar sugestões apenas 1x
 
   // Getters
   List<CartItem> get items => _items;
+  bool get hasShownSuggestions => _hasShownSuggestions;
   bool get isLoading => _isLoading;
   String? get error => _error;
 
@@ -82,6 +84,13 @@ class CartState extends ChangeNotifier {
   // 🧹 LIMPAR CARRINHO
   void clear() {
     _items.clear();
+    _hasShownSuggestions = false; // Resetar flag ao limpar carrinho
+    notifyListeners();
+  }
+  
+  // 🎯 Marcar que sugestões foram mostradas
+  void markSuggestionsAsShown() {
+    _hasShownSuggestions = true;
     notifyListeners();
   }
 

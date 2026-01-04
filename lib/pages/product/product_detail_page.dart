@@ -7,6 +7,8 @@ import '../../models/product_model.dart';
 import '../../models/brand_variant.dart';
 import '../../state/cart_state.dart';
 import '../cart/cart_page.dart';
+import '../../services/product_suggestions_service.dart';
+import '../../widgets/suggestions/product_suggestions_bottom_sheet.dart';
 
 class ProductDetailPage extends StatefulWidget {
   final ProductModel product;
@@ -66,6 +68,61 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       return badges.map((e) => e.toString()).toList();
     }
     return [];
+  }
+  
+  /// 🎯 Mostra sugestões de produtos relacionados
+  Future<void> _showProductSuggestions(CartState cart) async {
+    if (!mounted) return;
+    
+    try {
+      // Buscar IDs dos produtos no carrinho
+      final cartProductIds = cart.items.map((item) => item.id).toList();
+      
+      // Buscar sugestões do backend
+      final suggestionsService = ProductSuggestionsService();
+      final suggestions = await suggestionsService.getProductSuggestions(
+        restaurantId: widget.product.restaurantId,
+        cartProductIds: cartProductIds,
+      );
+      
+      // Se não há sugestões, não mostrar bottom sheet
+      if (suggestions.isEmpty || !mounted) {
+        return;
+      }
+      
+      // Marcar que sugestões foram mostradas
+      cart.markSuggestionsAsShown();
+      
+      // Mostrar bottom sheet
+      ProductSuggestionsBottomSheet.show(
+        context,
+        suggestions: suggestions,
+        onAddToCart: (product) {
+          // Adicionar produto sugerido ao carrinho
+          cart.addItem(
+            productId: product.id,
+            name: product.name,
+            price: product.price,
+            imageUrl: product.displayImage,
+            restaurantId: product.restaurantId,
+            restaurantName: product.restaurantName ?? 'Restaurante',
+          );
+          
+          // Feedback de sucesso
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('✅ ${product.name} adicionado ao carrinho!'),
+                duration: const Duration(seconds: 2),
+                backgroundColor: const Color(0xFF74241F),
+              ),
+            );
+          }
+        },
+      );
+    } catch (e) {
+      print('❌ Erro ao mostrar sugestões: $e');
+    }
   }
 
   List<Map<String, dynamic>> get _addons {
@@ -927,6 +984,14 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                         ),
                       ),
                     );
+                    
+                    // 🎯 Mostrar sugestões de produtos (após 1 segundo)
+                    // Condição: primeira vez OU carrinho tem menos de 3 itens
+                    if (!cart.hasShownSuggestions || cart.itemCount < 3) {
+                      Future.delayed(const Duration(seconds: 1), () {
+                        _showProductSuggestions(cart);
+                      });
+                    }
 
                     // Reset quantidade
                     setState(() {

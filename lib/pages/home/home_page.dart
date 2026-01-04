@@ -44,6 +44,21 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   late Future<List<PromotionModel>> _promotionsFuture;
   int _currentPromoIndex = 0;
 
+  /// 🔍 Normalizar texto: remove acentos, ç, e converte para minúsculas
+  /// Exemplo: "Dor de Cabeça" → "dor de cabeca"
+  String _normalizeText(String text) {
+    const withAccents = 'ÀÁÂÃÄÅàáâãäåÒÓÔÕÖØòóôõöøÈÉÊËèéêëÇçÌÍÎÏìíîïÙÚÛÜùúûüÿÑñ';
+    const withoutAccents = 'AAAAAAaaaaaaOOOOOOooooooEEEEeeeeCcIIIIiiiiUUUUuuuuyNn';
+    
+    String result = text.toLowerCase();
+    
+    for (int i = 0; i < withAccents.length; i++) {
+      result = result.replaceAll(withAccents[i], withoutAccents[i]);
+    }
+    
+    return result;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -249,10 +264,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   List<RestaurantModel> _filterRestaurants(List<RestaurantModel> restaurants) {
     if (_searchQuery.isEmpty) return restaurants;
     return restaurants.where((r) {
-      final query = _searchQuery.toLowerCase();
-      return r.name.toLowerCase().contains(query) ||
-          r.address.toLowerCase().contains(query) ||
-          (r.email?.toLowerCase().contains(query) ?? false);
+      final query = _searchQuery; // Já vem normalizado do TextField
+      return _normalizeText(r.name).contains(query) ||
+          _normalizeText(r.address).contains(query) ||
+          _normalizeText(r.email ?? '').contains(query);
     }).toList();
   }
 
@@ -260,21 +275,18 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   List<dynamic> _filterFeaturedProducts(List<dynamic> products) {
     if (_searchQuery.isEmpty) return products;
     return products.where((p) {
-      final query = _searchQuery.toLowerCase();
+      final query = _searchQuery; // Já vem normalizado do TextField
       
-      // ✅ Pesquisar nos badges/tags (normalizar _ para espaço)
+      // ✅ Pesquisar nos badges/tags (normalizar _ para espaço e remover acentos)
       final badges = p.badges as List<dynamic>? ?? [];
       final badgesText = badges
-          .map((badge) => badge.toString().toLowerCase().replaceAll('_', ' '))
+          .map((badge) => _normalizeText(badge.toString().replaceAll('_', ' ')))
           .join(' ');
       
-      // Normalizar query também
-      final normalizedQuery = query.trim();
-      
-      return (p.name?.toLowerCase().contains(normalizedQuery) ?? false) ||
-          (p.description?.toLowerCase().contains(normalizedQuery) ?? false) ||
-          (p.category?.toLowerCase().contains(normalizedQuery) ?? false) ||
-          badgesText.contains(normalizedQuery);
+      return _normalizeText(p.name ?? '').contains(query) ||
+          _normalizeText(p.description ?? '').contains(query) ||
+          _normalizeText(p.category ?? '').contains(query) ||
+          badgesText.contains(query);
     }).toList();
   }
 
@@ -282,21 +294,18 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   List<dynamic> _filterPharmacyProducts(List<dynamic> products) {
     if (_searchQuery.isEmpty) return products;
     return products.where((p) {
-      final query = _searchQuery.toLowerCase();
+      final query = _searchQuery; // Já vem normalizado do TextField
       
-      // ✅ Pesquisar nos badges/tags (normalizar _ para espaço)
+      // ✅ Pesquisar nos badges/tags (normalizar _ para espaço e remover acentos)
       final badges = p.badges as List<dynamic>? ?? [];
       final badgesText = badges
-          .map((badge) => badge.toString().toLowerCase().replaceAll('_', ' '))
+          .map((badge) => _normalizeText(badge.toString().replaceAll('_', ' ')))
           .join(' ');
       
-      // Normalizar query também
-      final normalizedQuery = query.trim();
-      
-      return (p.name?.toLowerCase().contains(normalizedQuery) ?? false) ||
-          (p.description?.toLowerCase().contains(normalizedQuery) ?? false) ||
-          (p.category?.toLowerCase().contains(normalizedQuery) ?? false) ||
-          badgesText.contains(normalizedQuery);
+      return _normalizeText(p.name ?? '').contains(query) ||
+          _normalizeText(p.description ?? '').contains(query) ||
+          _normalizeText(p.category ?? '').contains(query) ||
+          badgesText.contains(query);
     }).toList();
   }
 
@@ -304,21 +313,18 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   List<dynamic> _filterMarketProducts(List<dynamic> products) {
     if (_searchQuery.isEmpty) return products;
     return products.where((p) {
-      final query = _searchQuery.toLowerCase();
+      final query = _searchQuery; // Já vem normalizado do TextField
       
-      // ✅ Pesquisar nos badges/tags (normalizar _ para espaço)
+      // ✅ Pesquisar nos badges/tags (normalizar _ para espaço e remover acentos)
       final badges = p.badges as List<dynamic>? ?? [];
       final badgesText = badges
-          .map((badge) => badge.toString().toLowerCase().replaceAll('_', ' '))
+          .map((badge) => _normalizeText(badge.toString().replaceAll('_', ' ')))
           .join(' ');
       
-      // Normalizar query também
-      final normalizedQuery = query.trim();
-      
-      return (p.name?.toLowerCase().contains(normalizedQuery) ?? false) ||
-          (p.description?.toLowerCase().contains(normalizedQuery) ?? false) ||
-          (p.category?.toLowerCase().contains(normalizedQuery) ?? false) ||
-          badgesText.contains(normalizedQuery);
+      return _normalizeText(p.name ?? '').contains(query) ||
+          _normalizeText(p.description ?? '').contains(query) ||
+          _normalizeText(p.category ?? '').contains(query) ||
+          badgesText.contains(query);
     }).toList();
   }
 
@@ -561,7 +567,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           controller: _searchController,
           onChanged: (value) {
             setState(() {
-              _searchQuery = value.toLowerCase();
+              _searchQuery = _normalizeText(value);
             });
           },
           style: const TextStyle(color: Colors.white),

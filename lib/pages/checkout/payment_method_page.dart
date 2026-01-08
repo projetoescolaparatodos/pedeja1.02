@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import '../../models/order_model.dart' as models;
 import '../../services/backend_order_service.dart';
 import '../../state/auth_state.dart';
@@ -163,6 +165,21 @@ class _PaymentMethodPageState extends State<PaymentMethodPage> {
         (sum, item) => sum + item.totalPrice,
       );
 
+      // 5.5 Buscar taxa de entrega do restaurante
+      double deliveryFeeAmount = 0.0;
+      try {
+        final restaurantResponse = await http.get(
+          Uri.parse('https://api-pedeja.vercel.app/api/restaurants/${widget.restaurantId}'),
+        );
+        if (restaurantResponse.statusCode == 200) {
+          final restaurantData = json.decode(restaurantResponse.body);
+          deliveryFeeAmount = (restaurantData['deliveryFee'] ?? 0.0).toDouble();
+          debugPrint('💰 Taxa de entrega obtida: R\$ ${deliveryFeeAmount.toStringAsFixed(2)}');
+        }
+      } catch (e) {
+        debugPrint('⚠️ Erro ao buscar taxa de entrega: $e');
+      }
+
       // 6. Preparar endereço formatado
       Map<String, dynamic> addressData;
       
@@ -180,7 +197,9 @@ class _PaymentMethodPageState extends State<PaymentMethodPage> {
         restaurantId: widget.restaurantId,
         restaurantName: widget.restaurantName,
         items: orderItems,
-        total: restaurantTotal, // ✅ Total apenas deste restaurante
+        subtotal: restaurantTotal,
+        deliveryFee: deliveryFeeAmount,
+        total: restaurantTotal + deliveryFeeAmount,
         deliveryAddress: addressData,
         payment: paymentData,
         userName: userData['name']?.toString(),
@@ -189,8 +208,8 @@ class _PaymentMethodPageState extends State<PaymentMethodPage> {
 
       debugPrint('✅ Pedido criado via API: $orderId');
 
-      // 8. Salvar total ANTES de limpar itens
-      final totalAmount = restaurantTotal;
+      // 8. Salvar total ANTES de limpar itens (INCLUINDO taxa de entrega)
+      final totalAmount = restaurantTotal + deliveryFeeAmount;
 
       // 9. Limpar APENAS os itens deste restaurante do carrinho
       for (var item in restaurantItems) {

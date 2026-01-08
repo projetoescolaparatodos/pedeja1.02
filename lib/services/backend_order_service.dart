@@ -18,10 +18,14 @@ class BackendOrderService {
     required Map<String, dynamic> payment,
     String? userName,
     String? userPhone,
+    double subtotal = 0.0,
+    double deliveryFee = 0.0,
   }) async {
     try {
       debugPrint('📦 [BackendOrderService] Criando pedido na API...');
       debugPrint('   Restaurante: $restaurantName');
+      debugPrint('   Subtotal: R\$ ${subtotal.toStringAsFixed(2)}');
+      debugPrint('   Taxa Entrega: R\$ ${deliveryFee.toStringAsFixed(2)}');
       debugPrint('   Total: R\$ ${total.toStringAsFixed(2)}');
       debugPrint('   Método: ${payment['method']}');
       debugPrint('   Items com brandName: ${items.where((i) => i.brandName != null).map((i) => '${i.name} (${i.brandName})').join(', ')}');
@@ -47,8 +51,9 @@ class BackendOrderService {
               'price': addon.price,
             }).toList(),
           }).toList(),
+          'subtotal': subtotal > 0 ? subtotal : total,
+          'deliveryFee': deliveryFee,
           'totalAmount': total,
-          'deliveryFee': 0.0,              // ✅ Taxa de entrega sempre 0 (adicionada manualmente depois pelo vendedor)
           'deliveryAddress': deliveryAddress,
           'payment': payment,
           if (userName != null) 'userName': userName,

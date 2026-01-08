@@ -16,6 +16,8 @@ class OrderService {
     required double total,
     required String deliveryAddress,
     models.PaymentInfo? paymentInfo,
+    double subtotal = 0.0,
+    double deliveryFee = 0.0,
   }) async {
     try {
       final user = _auth.currentUser;
@@ -25,6 +27,8 @@ class OrderService {
 
       debugPrint('📦 [OrderService] Criando pedido...');
       debugPrint('   Restaurante: $restaurantName');
+      debugPrint('   Subtotal: R\$ ${subtotal.toStringAsFixed(2)}');
+      debugPrint('   Taxa Entrega: R\$ ${deliveryFee.toStringAsFixed(2)}');
       debugPrint('   Total: R\$ ${total.toStringAsFixed(2)}');
       debugPrint('   Itens: ${items.length}');
 
@@ -45,6 +49,8 @@ class OrderService {
             'price': addon.price,
           }).toList(),
         }).toList(),
+        'subtotal': subtotal,
+        'deliveryFee': deliveryFee,
         'total': total,
         'deliveryAddress': deliveryAddress,
         'status': 'pending', // pending, confirmed, preparing, delivering, delivered, cancelled

@@ -44,17 +44,52 @@ class CatalogProvider extends ChangeNotifier {
   bool get marketProductsLoading => _marketProductsLoading;
   String? get marketProductsError => _marketProductsError;
 
-  // COMPATIBILIDADE: Mantém randomProducts como união das 3 listas
-  @Deprecated('Use featuredProducts, pharmacyProducts ou marketProducts')
+  // PRODUTOS DE BEBIDAS
+  List<ProductModel> _drinksProducts = [];
+  bool _drinksProductsLoading = false;
+  String? _drinksProductsError;
+
+  List<ProductModel> get drinksProducts => _drinksProducts;
+  bool get drinksProductsLoading => _drinksProductsLoading;
+  String? get drinksProductsError => _drinksProductsError;
+
+  // PRODUTOS DE CUIDADOS PESSOAIS
+  List<ProductModel> _personalCareProducts = [];
+  bool _personalCareProductsLoading = false;
+  String? _personalCareProductsError;
+
+  List<ProductModel> get personalCareProducts => _personalCareProducts;
+  bool get personalCareProductsLoading => _personalCareProductsLoading;
+  String? get personalCareProductsError => _personalCareProductsError;
+
+  // PRODUTOS DE PERFUMARIA
+  List<ProductModel> _perfumeryProducts = [];
+  bool _perfumeryProductsLoading = false;
+  String? _perfumeryProductsError;
+
+  List<ProductModel> get perfumeryProducts => _perfumeryProducts;
+  bool get perfumeryProductsLoading => _perfumeryProductsLoading;
+  String? get perfumeryProductsError => _perfumeryProductsError;
+
+  // COMPATIBILIDADE: Mantém randomProducts como união de todas as listas
+  @Deprecated('Use featuredProducts, pharmacyProducts, marketProducts, drinksProducts, personalCareProducts ou perfumeryProducts')
   List<ProductModel> get randomProducts => [
     ..._featuredProducts,
+    ..._drinksProducts,
     ..._pharmacyProducts,
+    ..._personalCareProducts,
     ..._marketProducts,
+    ..._perfumeryProducts,
   ];
 
-  @Deprecated('Use featuredProductsLoading, pharmacyProductsLoading ou marketProductsLoading')
+  @Deprecated('Use featuredProductsLoading, pharmacyProductsLoading, marketProductsLoading, drinksProductsLoading, personalCareProductsLoading ou perfumeryProductsLoading')
   bool get randomProductsLoading => 
-    _featuredProductsLoading || _pharmacyProductsLoading || _marketProductsLoading;
+    _featuredProductsLoading || 
+    _drinksProductsLoading || 
+    _pharmacyProductsLoading || 
+    _personalCareProductsLoading || 
+    _marketProductsLoading ||
+    _perfumeryProductsLoading;
 
   @Deprecated('Use featuredProductsError, pharmacyProductsError ou marketProductsError')
   String? get randomProductsError =>
@@ -108,8 +143,11 @@ class CatalogProvider extends ChangeNotifier {
     debugPrint('🔄 [CatalogProvider] Refresh silencioso de produtos');
     await Future.wait([
       loadFeaturedProducts(force: true),
+      loadDrinksProducts(force: true),
       loadPharmacyProducts(force: true),
+      loadPersonalCareProducts(force: true),
       loadMarketProducts(force: true),
+      loadPerfumeryProducts(force: true),
     ]);
   }
 
@@ -385,13 +423,217 @@ class CatalogProvider extends ChangeNotifier {
     }
   }
 
-  /// COMPATIBILIDADE: Mantém método antigo mas chama os 3 novos
-  @Deprecated('Use loadFeaturedProducts, loadPharmacyProducts e loadMarketProducts')
+  /// Carrega produtos de bebidas da API
+  Future<void> loadDrinksProducts({bool force = false}) async {
+    if (!force && _drinksProducts.isNotEmpty) {
+      debugPrint('✅ [CatalogProvider] Produtos de bebidas já carregados (${_drinksProducts.length} produtos)');
+      return;
+    }
+
+    if (_drinksProductsLoading) return;
+
+    debugPrint('🚀 [CatalogProvider] Carregando TODOS os produtos de bebidas...');
+
+    _drinksProductsLoading = true;
+    _drinksProductsError = null;
+    notifyListeners();
+
+    try {
+      final url = Uri.parse('https://api-pedeja.vercel.app/api/products/drinks');
+
+      debugPrint('📡 [CatalogProvider] URL Bebidas: $url');
+
+      final response = await http.get(url, headers: {'Content-Type': 'application/json'});
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final total = data['total'] ?? 0;
+        debugPrint('🔍 [Backend Response Bebidas] success: ${data['success']}, total: $total');
+
+        if (data['success'] == true && data['data'] != null) {
+          final List<dynamic> productsJson = data['data'];
+          
+          debugPrint('📦 [CatalogProvider] Produtos de bebidas recebidos: ${productsJson.length}');
+
+          final products = productsJson.map((json) => ProductModel.fromJson(json)).toList();
+
+          // 🎲 Shuffle local (personalizado por usuário)
+          products.shuffle();
+
+          // Extrai categorias
+          for (var product in products) {
+            if (product.category != null && product.category!.isNotEmpty) {
+              _availableCategories.add(product.category!);
+            }
+          }
+
+          _drinksProducts = products;
+          _drinksProductsError = null;
+          debugPrint('✅ [CatalogProvider] ${_drinksProducts.length} produtos de bebidas carregados e embaralhados!');
+        } else {
+          _drinksProductsError = 'API retornou success=false';
+        }
+      } else {
+        _drinksProductsError = 'Erro ao carregar: ${response.statusCode}';
+      }
+    } catch (error) {
+      debugPrint('❌ [CatalogProvider] Erro produtos de bebidas: $error');
+      if (error.toString().contains('SocketException') ||
+          error.toString().contains('Failed host lookup')) {
+        _drinksProductsError = 'Sem conexão com a internet';
+      } else {
+        _drinksProductsError = 'Erro ao carregar produtos';
+      }
+    } finally {
+      _drinksProductsLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// Carrega produtos de cuidados pessoais da API
+  Future<void> loadPersonalCareProducts({bool force = false}) async {
+    if (!force && _personalCareProducts.isNotEmpty) {
+      debugPrint('✅ [CatalogProvider] Produtos de cuidados pessoais já carregados (${_personalCareProducts.length} produtos)');
+      return;
+    }
+
+    if (_personalCareProductsLoading) return;
+
+    debugPrint('🚀 [CatalogProvider] Carregando TODOS os produtos de cuidados pessoais...');
+
+    _personalCareProductsLoading = true;
+    _personalCareProductsError = null;
+    notifyListeners();
+
+    try {
+      final url = Uri.parse('https://api-pedeja.vercel.app/api/products/personal-care');
+
+      debugPrint('📡 [CatalogProvider] URL Cuidados Pessoais: $url');
+
+      final response = await http.get(url, headers: {'Content-Type': 'application/json'});
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final total = data['total'] ?? 0;
+        debugPrint('🔍 [Backend Response Cuidados Pessoais] success: ${data['success']}, total: $total');
+
+        if (data['success'] == true && data['data'] != null) {
+          final List<dynamic> productsJson = data['data'];
+          
+          debugPrint('📦 [CatalogProvider] Produtos de cuidados pessoais recebidos: ${productsJson.length}');
+
+          final products = productsJson.map((json) => ProductModel.fromJson(json)).toList();
+
+          // 🎲 Shuffle local (personalizado por usuário)
+          products.shuffle();
+
+          // Extrai categorias
+          for (var product in products) {
+            if (product.category != null && product.category!.isNotEmpty) {
+              _availableCategories.add(product.category!);
+            }
+          }
+
+          _personalCareProducts = products;
+          _personalCareProductsError = null;
+          debugPrint('✅ [CatalogProvider] ${_personalCareProducts.length} produtos de cuidados pessoais carregados e embaralhados!');
+        } else {
+          _personalCareProductsError = 'API retornou success=false';
+        }
+      } else {
+        _personalCareProductsError = 'Erro ao carregar: ${response.statusCode}';
+      }
+    } catch (error) {
+      debugPrint('❌ [CatalogProvider] Erro produtos de cuidados pessoais: $error');
+      if (error.toString().contains('SocketException') ||
+          error.toString().contains('Failed host lookup')) {
+        _personalCareProductsError = 'Sem conexão com a internet';
+      } else {
+        _personalCareProductsError = 'Erro ao carregar produtos';
+      }
+    } finally {
+      _personalCareProductsLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// Carrega produtos de perfumaria da API
+  Future<void> loadPerfumeryProducts({bool force = false}) async {
+    if (!force && _perfumeryProducts.isNotEmpty) {
+      debugPrint('✅ [CatalogProvider] Produtos de perfumaria já carregados (${_perfumeryProducts.length} produtos)');
+      return;
+    }
+
+    if (_perfumeryProductsLoading) return;
+
+    debugPrint('🚀 [CatalogProvider] Carregando TODOS os produtos de perfumaria...');
+
+    _perfumeryProductsLoading = true;
+    _perfumeryProductsError = null;
+    notifyListeners();
+
+    try {
+      final url = Uri.parse('https://api-pedeja.vercel.app/api/products/perfumery');
+
+      debugPrint('📡 [CatalogProvider] URL Perfumaria: $url');
+
+      final response = await http.get(url, headers: {'Content-Type': 'application/json'});
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final total = data['total'] ?? 0;
+        debugPrint('🔍 [Backend Response Perfumaria] success: ${data['success']}, total: $total');
+
+        if (data['success'] == true && data['data'] != null) {
+          final List<dynamic> productsJson = data['data'];
+          
+          debugPrint('📦 [CatalogProvider] Produtos de perfumaria recebidos: ${productsJson.length}');
+
+          final products = productsJson.map((json) => ProductModel.fromJson(json)).toList();
+
+          // 🎲 Shuffle local (personalizado por usuário)
+          products.shuffle();
+
+          // Extrai categorias
+          for (var product in products) {
+            if (product.category != null && product.category!.isNotEmpty) {
+              _availableCategories.add(product.category!);
+            }
+          }
+
+          _perfumeryProducts = products;
+          _perfumeryProductsError = null;
+          debugPrint('✅ [CatalogProvider] ${_perfumeryProducts.length} produtos de perfumaria carregados e embaralhados!');
+        } else {
+          _perfumeryProductsError = 'API retornou success=false';
+        }
+      } else {
+        _perfumeryProductsError = 'Erro ao carregar: ${response.statusCode}';
+      }
+    } catch (error) {
+      debugPrint('❌ [CatalogProvider] Erro produtos de perfumaria: $error');
+      if (error.toString().contains('SocketException') ||
+          error.toString().contains('Failed host lookup')) {
+        _perfumeryProductsError = 'Sem conexão com a internet';
+      } else {
+        _perfumeryProductsError = 'Erro ao carregar produtos';
+      }
+    } finally {
+      _perfumeryProductsLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// COMPATIBILIDADE: Mantém método antigo mas chama todos os novos
+  @Deprecated('Use loadFeaturedProducts, loadDrinksProducts, loadPharmacyProducts, loadPersonalCareProducts, loadMarketProducts e loadPerfumeryProducts')
   Future<void> loadRandomProducts({bool force = false}) async {
     await Future.wait([
       loadFeaturedProducts(force: force),
+      loadDrinksProducts(force: force),
       loadPharmacyProducts(force: force),
+      loadPersonalCareProducts(force: force),
       loadMarketProducts(force: force),
+      loadPerfumeryProducts(force: force),
     ]);
   }
 

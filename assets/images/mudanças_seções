@@ -1,0 +1,392 @@
+eorganizamos completamente os endpoints de seções de produtos da homepage, passando de **3 endpoints** para **6 endpoints** com categorias bem definidas e sem sobreposição.
+
+---
+
+## 📊 ANTES vs DEPOIS
+
+### ❌ ANTES (3 endpoints)
+
+| Endpoint | Categorias |
+|----------|------------|
+| `/api/products/featured` | TODOS exceto farmácia e mercado (exclusão) |
+| `/api/products/pharmacy` | Remédio, Medicamento, Suplementos |
+| `/api/products/market` | Cuidados Pessoais, Higiene, Perfumaria, Varejinho, Cosméticos, Beleza, Limpeza |
+
+**Problemas:**
+- Featured usava lógica de exclusão (complexa)
+- Market misturava categorias diferentes
+- Faltavam seções importantes (Bebidas, Perfumaria)
+
+---
+
+### ✅ DEPOIS (6 endpoints)
+
+| Endpoint | Categorias | Emoji |
+|----------|------------|-------|
+| `/api/products/featured` | Pratos Principais, Sucos, Sobremesas, Petiscos, Saladas, Massas, Carnes, Frutos do Mar, Vegetarianos, Lanche, Açaí, Doces, Salgados | 🍕 |
+| `/api/products/pharmacy` | **Remédio** (apenas) | 💊 |
+| `/api/products/market` | Mercearia, Higiene, Varejinho, VAREJINHO, Material para Churrasco, Limpeza, Congelados | 🛒 |
+| `/api/products/personal-care` | **Cuidados Pessoais, Vitaminas, Acessórios de Saúde** (NOVO) | 🧴 |
+| `/api/products/drinks` | **Refrigerantes, Cervejas, Energéticos, Destilados, Vinhos, Bebidas** (NOVO) | 🍺 |
+| `/api/products/perfumery` | **Perfumaria, PERFUMARIA, Outros, Beleza** (NOVO) | 💄 |
+
+---
+
+## 🔧 MUDANÇAS DETALHADAS
+
+### 1️⃣ **Featured (Destaques)** - `api/products/featured.js`
+
+**Mudança:** De lógica de **exclusão** para **inclusão**
+
+**Antes:**
+```javascript
+// Excluía categorias de farmácia e mercado
+const excludeCategories = [
+  'remedio', 'medicamento', 'suplementos',
+  'cuidados pessoais', 'higiene', 'perfumaria',
+  'varejinho', 'cosmeticos', 'beleza', 'limpeza', 'pet'
+];
+
+allProducts = allProducts.filter(p => {
+  return !excludeCategories.some(exc => productCategory === exc);
+});
+```
+
+**Depois:**
+```javascript
+// Inclui APENAS categorias de comidas/lanches
+const featuredCategories = [
+  'pratos principais', 'sucos', 'sobremesas', 'petiscos', 'saladas', 'massas',
+  'carnes', 'frutos do mar', 'vegetarianos', 'lanche', 'acai', 'doces', 'salgados'
+];
+
+allProducts = allProducts.filter(p => {
+  return featuredCategories.some(cat => productCategory === cat);
+});
+```
+
+**Impacto:**
+- ✅ Mais previsível e explícito
+- ✅ Fácil adicionar/remover categorias
+- ✅ Sem conflitos com outros endpoints
+
+---
+
+### 2️⃣ **Pharmacy (Farmácia)** - `api/products/pharmacy.js`
+
+**Mudança:** Removidas categorias extras
+
+**Antes:**
+```javascript
+const pharmacyCategories = ['remedio', 'medicamento', 'suplementos'];
+```
+
+**Depois:**
+```javascript
+const pharmacyCategories = ['remedio'];
+```
+
+**Impacto:**
+- ⚠️ **Medicamentos** e **Suplementos** não aparecem mais aqui
+- Solução: Adicionar "Suplementos" em Personal-Care se necessário
+
+---
+
+### 3️⃣ **Market (Mercado)** - `api/products/market.js`
+
+**Mudança:** Removido Cuidados Pessoais, adicionadas novas categorias
+
+**Antes:**
+```javascript
+const marketCategories = [
+  'cuidados pessoais', 'higiene', 'perfumaria',
+  'varejinho', 'cosmeticos', 'beleza', 'limpeza'
+];
+```
+
+**Depois:**
+```javascript
+const marketCategories = [
+  'mercearia', 'higiene', 'varejinho', 'varejinho',
+  'material para churrasco', 'limpeza', 'congelados'
+];
+```
+
+**Impacto:**
+- ❌ Cuidados Pessoais → Movido para `/api/products/personal-care`
+- ❌ Perfumaria/Beleza → Movido para `/api/products/perfumery`
+- ✅ Adicionado: Material para Churrasco, Congelados
+
+---
+
+### 4️⃣ **Personal-Care (Cuidados Pessoais)** - `api/products/personal-care.js` ⭐ NOVO
+
+**Arquivo:** `api/products/personal-care.js` (criado do zero)
+
+```javascript
+const personalCareCategories = ['cuidados pessoais', 'vitaminas', 'acessorios de saude'];
+```
+
+**Características:**
+- Cache de 30 minutos
+- Busca inteligente por nome/descrição/badges
+- Suporte a produtos com múltiplas marcas
+- Normalização de categorias (remove acentos)
+
+**Exemplo de uso:**
+```bash
+GET /api/products/personal-care
+GET /api/products/personal-care?search=vitamina C
+GET /api/products/personal-care?noCache=1
+```
+
+---
+
+### 5️⃣ **Drinks (Bebidas)** - `api/products/drinks.js` ⭐ NOVO
+
+**Arquivo:** `api/products/drinks.js` (criado do zero)
+
+```javascript
+const drinksCategories = ['refrigerantes', 'cervejas', 'energeticos', 'destilados', 'vinhos', 'bebidas'];
+```
+
+**Características:**
+- Cache de 30 minutos
+- Inclui categoria genérica "bebidas" para capturar todos
+- Suporte a busca por marca (ex: "Coca-Cola", "Heineken")
+
+**Exemplo de uso:**
+```bash
+GET /api/products/drinks
+GET /api/products/drinks?search=cerveja
+```
+
+---
+
+### 6️⃣ **Perfumery (Perfumaria)** - `api/products/perfumery.js` ⭐ NOVO
+
+**Arquivo:** `api/products/perfumery.js` (criado do zero)
+
+```javascript
+const perfumeryCategories = ['perfumaria', 'outros', 'beleza'];
+```
+
+**Características:**
+- Captura "PERFUMARIA" (maiúscula) e "perfumaria" (minúscula)
+- Categoria "outros" para produtos sem categoria definida
+- Categoria "beleza" para maquiagem, cosméticos, etc.
+
+**Exemplo de uso:**
+```bash
+GET /api/products/perfumery
+GET /api/products/perfumery?search=batom
+```
+
+---
+
+## 📁 ARQUIVOS MODIFICADOS
+
+### Arquivos Editados (3):
+1. ✏️ `api/products/featured.js` - Mudança de exclusão para inclusão
+2. ✏️ `api/products/pharmacy.js` - Apenas "Remédio"
+3. ✏️ `api/products/market.js` - Removido Cuidados Pessoais
+
+### Arquivos Criados (3):
+4. ✨ `api/products/personal-care.js` - Novo endpoint
+5. ✨ `api/products/drinks.js` - Novo endpoint
+6. ✨ `api/products/perfumery.js` - Novo endpoint
+
+### Arquivo de Rotas:
+7. ✏️ `index.js` - Registrados 3 novos endpoints
+
+---
+
+## 🧪 COMO TESTAR
+
+### 1. Iniciar o servidor
+```bash
+npm start
+# ou
+node index.js
+```
+
+### 2. Executar script de teste
+```bash
+.\test-endpoints-simples.ps1
+```
+
+### 3. Teste manual com cURL
+
+```bash
+# Destaques (comidas/lanches)
+curl http://localhost:3000/api/products/featured
+
+# Farmácia (remédios)
+curl http://localhost:3000/api/products/pharmacy
+
+# Mercado (varejinho, higiene, etc)
+curl http://localhost:3000/api/products/market
+
+# Cuidados Pessoais (vitaminas, etc)
+curl http://localhost:3000/api/products/personal-care
+
+# Bebidas (cervejas, refrigerantes, etc)
+curl http://localhost:3000/api/products/drinks
+
+# Perfumaria (beleza, maquiagem, etc)
+curl http://localhost:3000/api/products/perfumery
+```
+
+### 4. Teste com busca
+```bash
+curl "http://localhost:3000/api/products/drinks?search=cerveja"
+curl "http://localhost:3000/api/products/perfumery?search=batom"
+```
+
+---
+
+## 📊 CATEGORIAS POR ENDPOINT (Referência Rápida)
+
+### 🍕 Featured (Destaques)
+- Pratos Principais
+- Sucos
+- Sobremesas
+- Petiscos
+- Saladas
+- Massas
+- Carnes
+- Frutos do Mar
+- Vegetarianos
+- Lanche
+- Açaí
+- Doces
+- Salgados
+
+### 💊 Pharmacy (Farmácia)
+- Remédio
+
+### 🛒 Market (Mercado)
+- Mercearia
+- Higiene
+- Varejinho
+- VAREJINHO
+- Material para Churrasco
+- Limpeza
+- Congelados
+
+### 🧴 Personal-Care (Cuidados Pessoais)
+- Cuidados Pessoais
+- Vitaminas
+- Acessórios de Saúde
+
+### 🍺 Drinks (Bebidas)
+- Refrigerantes
+- Cervejas
+- Energéticos
+- Destilados
+- Vinhos
+- Bebidas (genérico)
+
+### 💄 Perfumery (Perfumaria)
+- Perfumaria
+- PERFUMARIA
+- Outros
+- Beleza
+
+---
+
+## ⚙️ CONFIGURAÇÃO DE CACHE
+
+Todos os endpoints usam:
+- **TTL:** 30 minutos (1800 segundos)
+- **Chave:** `products:{section}:all:search={termo}`
+- **Bypass:** `?noCache=1`
+
+Exemplo:
+```
+products:featured:all:search=
+products:pharmacy:all:search=dipirona
+products:drinks:all:search=cerveja
+```
+
+---
+
+## 🔍 NORMALIZAÇÃO DE CATEGORIAS
+
+Todos os endpoints usam a mesma função de normalização:
+
+```javascript
+function normalizeCategory(category) {
+  return category
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // Remove acentos
+    .trim();
+}
+```
+
+**Exemplos:**
+- "Açaí" → "acai"
+- "Bebidas  " → "bebidas"
+- "PERFUMARIA" → "perfumaria"
+
+---
+
+## 🚀 PRÓXIMOS PASSOS
+
+### Para o Flutter App:
+1. Adicionar chamadas aos 3 novos endpoints
+2. Criar seções na homepage:
+   - "Cuidados Pessoais"
+   - "Bebidas"
+   - "Perfumaria"
+3. Ajustar UI das seções existentes
+
+### Para o Painel Admin:
+1. Informar restaurantes sobre as novas categorias
+2. Garantir que produtos estejam categorizados corretamente
+
+### Monitoramento:
+1. Verificar logs de cache hit/miss
+2. Monitorar distribuição de produtos por seção
+3. Ajustar categorias conforme feedback
+
+---
+
+## ❓ FAQ
+
+**P: Por que separar Bebidas de Featured?**
+R: Para criar uma seção dedicada e facilitar navegação do usuário
+
+**P: Produtos sem categoria aparecem onde?**
+R: Não aparecem em nenhuma seção (são filtrados)
+
+**P: Como adicionar uma categoria nova?**
+R: Editar o array de categorias no endpoint correspondente e reiniciar o servidor
+
+**P: O cache é compartilhado entre endpoints?**
+R: Não, cada endpoint tem sua própria chave de cache
+
+**P: Posso buscar por marca?**
+R: Sim! Use `?search=nome-da-marca`
+
+---
+
+## 📝 LOG DE MUDANÇAS
+
+**Data:** 05/01/2026
+
+**Modificações:**
+1. ✏️ Featured: Mudou de exclusão para inclusão de categorias
+2. ✏️ Pharmacy: Removidas categorias extras (apenas Remédio)
+3. ✏️ Market: Removido Cuidados Pessoais, adicionadas novas categorias
+4. ✨ Personal-Care: Criado endpoint para Cuidados Pessoais
+5. ✨ Drinks: Criado endpoint para Bebidas
+6. ✨ Perfumery: Criado endpoint para Perfumaria
+7. ✏️ index.js: Registrados 3 novos endpoints
+
+**Impacto:**
+- 6 seções bem definidas
+- Sem sobreposição de categorias
+- Melhor organização para o usuário
+- Facilita manutenção e expansão futura

@@ -44,6 +44,46 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   late Future<List<PromotionModel>> _promotionsFuture;
   int _currentPromoIndex = 0;
 
+  // Categoria selecionada por seção (independente)
+  String _selectedCategoryFeatured = 'Todos';
+  String _selectedCategoryDrinks = 'Todos';
+  String _selectedCategoryPharmacy = 'Todos';
+  String _selectedCategoryPersonalCare = 'Todos';
+  String _selectedCategoryMarket = 'Todos';
+  String _selectedCategoryPerfumery = 'Todos';
+
+  // Allowed categories per section (normalized)
+  final Set<String> _featuredAllowed = {
+    'todos',
+    'pratos principais', 'sucos', 'sobremesas', 'petiscos', 'saladas', 'massas',
+    'carnes', 'frutos do mar', 'vegetarianos', 'lanche', 'acai', 'doces', 'salgados'
+  };
+
+  final Set<String> _drinksAllowed = {
+    'todos',
+    'refrigerantes', 'cervejas', 'energeticos', 'destilados', 'vinhos', 'bebidas'
+  };
+
+  final Set<String> _pharmacyAllowed = {
+    'todos',
+    'remedio'
+  };
+
+  final Set<String> _personalCareAllowed = {
+    'todos',
+    'cuidados pessoais', 'vitaminas', 'acessorios de saude'
+  };
+
+  final Set<String> _marketAllowed = {
+    'todos',
+    'mercearia', 'higiene', 'varejinho', 'material para churrasco', 'limpeza', 'congelados'
+  };
+
+  final Set<String> _perfumeryAllowed = {
+    'todos',
+    'perfumaria', 'outros', 'beleza'
+  };
+
   /// 🔍 Normalizar texto: remove acentos, ç, e converte para minúsculas
   /// Exemplo: "Dor de Cabeça" → "dor de cabeca"
   String _normalizeText(String text) {
@@ -77,18 +117,21 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
     // ⚡ Carregar dados do catálogo em paralelo
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      debugPrint('🚀 [HomePage] Iniciando carregamento das 3 seções...');
+      debugPrint('🚀 [HomePage] Iniciando carregamento das 6 seções...');
       final catalog = context.read<CatalogProvider>();
       
       try {
-        // Carregar 3 seções em paralelo para economizar tempo
+        // Carregar 6 seções em paralelo para economizar tempo
         await Future.wait([
           catalog.loadRestaurants(),
           catalog.loadFeaturedProducts(),
+          catalog.loadDrinksProducts(),
           catalog.loadPharmacyProducts(),
+          catalog.loadPersonalCareProducts(),
           catalog.loadMarketProducts(),
+          catalog.loadPerfumeryProducts(),
         ]);
-        debugPrint('✅ [HomePage] 3 seções carregadas com sucesso!');
+        debugPrint('✅ [HomePage] 6 seções carregadas com sucesso!');
       } catch (e) {
         debugPrint('❌ [HomePage] Erro ao carregar seções: $e');
       }
@@ -182,14 +225,17 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     final hoursUpdated = await OperatingHoursService.refreshOperatingHours(force: true);
     debugPrint('🕒 [HomePage] Horários ${hoursUpdated ? "atualizados" : "não atualizados"}');
     
-    // Recarrega dados do catálogo (3 seções em paralelo)
+    // Recarrega dados do catálogo (6 seções em paralelo)
     if (mounted) {
       final catalog = context.read<CatalogProvider>();
       await Future.wait([
         catalog.loadRestaurants(),
         catalog.loadFeaturedProducts(force: true),
+        catalog.loadDrinksProducts(force: true),
         catalog.loadPharmacyProducts(force: true),
+        catalog.loadPersonalCareProducts(force: true),
         catalog.loadMarketProducts(force: true),
+        catalog.loadPerfumeryProducts(force: true),
       ]);
     }
     
@@ -406,6 +452,141 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     return result;
   }
 
+  /// ✅ Filtrar produtos de bebidas pela busca
+  /// Retorna Map<ProductModel, String?> onde String? é o nome da marca que deu match
+  Map<dynamic, String?> _filterDrinksProducts(List<dynamic> products) {
+    if (_searchQuery.isEmpty) {
+      return {for (var p in products) p: null};
+    }
+    
+    final result = <dynamic, String?>{};
+    final query = _searchQuery; // Já vem normalizado do TextField
+    
+    for (var p in products) {
+      String? matchedBrandName;
+      
+      // 🥇 PRIORIDADE 1: Pesquisar nas marcas (brands)
+      if (p.brands != null && (p.brands as List).isNotEmpty) {
+        for (var brand in p.brands) {
+          final brandName = brand.brandName ?? '';
+          if (_normalizeText(brandName).contains(query)) {
+            matchedBrandName = brandName;
+            result[p] = matchedBrandName;
+            break; // Primeira marca que dá match
+          }
+        }
+      }
+      
+      // Se já encontrou marca, continua para próximo produto
+      if (matchedBrandName != null) continue;
+      
+      // 🥈 PRIORIDADE 2: Pesquisar em nome, descrição, categoria
+      final badges = p.badges as List<dynamic>? ?? [];
+      final badgesText = badges
+          .map((badge) => _normalizeText(badge.toString().replaceAll('_', ' ')))
+          .join(' ');
+      
+      if (_normalizeText(p.name ?? '').contains(query) ||
+          _normalizeText(p.description ?? '').contains(query) ||
+          _normalizeText(p.category ?? '').contains(query) ||
+          badgesText.contains(query)) {
+        result[p] = null; // Match no produto, mas não na marca
+      }
+    }
+    
+    return result;
+  }
+
+  /// ✅ Filtrar produtos de cuidados pessoais pela busca
+  /// Retorna Map<ProductModel, String?> onde String? é o nome da marca que deu match
+  Map<dynamic, String?> _filterPersonalCareProducts(List<dynamic> products) {
+    if (_searchQuery.isEmpty) {
+      return {for (var p in products) p: null};
+    }
+    
+    final result = <dynamic, String?>{};
+    final query = _searchQuery; // Já vem normalizado do TextField
+    
+    for (var p in products) {
+      String? matchedBrandName;
+      
+      // 🥇 PRIORIDADE 1: Pesquisar nas marcas (brands)
+      if (p.brands != null && (p.brands as List).isNotEmpty) {
+        for (var brand in p.brands) {
+          final brandName = brand.brandName ?? '';
+          if (_normalizeText(brandName).contains(query)) {
+            matchedBrandName = brandName;
+            result[p] = matchedBrandName;
+            break; // Primeira marca que dá match
+          }
+        }
+      }
+      
+      // Se já encontrou marca, continua para próximo produto
+      if (matchedBrandName != null) continue;
+      
+      // 🥈 PRIORIDADE 2: Pesquisar em nome, descrição, categoria
+      final badges = p.badges as List<dynamic>? ?? [];
+      final badgesText = badges
+          .map((badge) => _normalizeText(badge.toString().replaceAll('_', ' ')))
+          .join(' ');
+      
+      if (_normalizeText(p.name ?? '').contains(query) ||
+          _normalizeText(p.description ?? '').contains(query) ||
+          _normalizeText(p.category ?? '').contains(query) ||
+          badgesText.contains(query)) {
+        result[p] = null; // Match no produto, mas não na marca
+      }
+    }
+    
+    return result;
+  }
+
+  /// ✅ Filtrar produtos de perfumaria pela busca
+  /// Retorna Map<ProductModel, String?> onde String? é o nome da marca que deu match
+  Map<dynamic, String?> _filterPerfumeryProducts(List<dynamic> products) {
+    if (_searchQuery.isEmpty) {
+      return {for (var p in products) p: null};
+    }
+    
+    final result = <dynamic, String?>{};
+    final query = _searchQuery; // Já vem normalizado do TextField
+    
+    for (var p in products) {
+      String? matchedBrandName;
+      
+      // 🥇 PRIORIDADE 1: Pesquisar nas marcas (brands)
+      if (p.brands != null && (p.brands as List).isNotEmpty) {
+        for (var brand in p.brands) {
+          final brandName = brand.brandName ?? '';
+          if (_normalizeText(brandName).contains(query)) {
+            matchedBrandName = brandName;
+            result[p] = matchedBrandName;
+            break; // Primeira marca que dá match
+          }
+        }
+      }
+      
+      // Se já encontrou marca, continua para próximo produto
+      if (matchedBrandName != null) continue;
+      
+      // 🥈 PRIORIDADE 2: Pesquisar em nome, descrição, categoria
+      final badges = p.badges as List<dynamic>? ?? [];
+      final badgesText = badges
+          .map((badge) => _normalizeText(badge.toString().replaceAll('_', ' ')))
+          .join(' ');
+      
+      if (_normalizeText(p.name ?? '').contains(query) ||
+          _normalizeText(p.description ?? '').contains(query) ||
+          _normalizeText(p.category ?? '').contains(query) ||
+          badgesText.contains(query)) {
+        result[p] = null; // Match no produto, mas não na marca
+      }
+    }
+    
+    return result;
+  }
+
   /// Scroll suave para o topo da página
   void _scrollToTop() {
     _scrollController.animateTo(
@@ -415,7 +596,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     );
   }
 
-  /// Scroll suave para uma seção específica (0=Destaque, 1=Farmácia, 2=Mercado)
+  /// Scroll suave para uma seção específica (0=Destaque, 1=Bebidas, 2=Farmácia, 3=Cuidados Pessoais, 4=Mercado, 5=Perfumaria)
   void _scrollToSection(int section) {
     // Estimativas de posição (ajuste conforme necessário)
     double targetOffset = 0;
@@ -423,11 +604,20 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       case 0: // Produtos em Destaque
         targetOffset = 900;
         break;
-      case 1: // Farmácia
-        targetOffset = 1600;
+      case 1: // Bebidas
+        targetOffset = 1300;
         break;
-      case 2: // Mercado
-        targetOffset = 2400;
+      case 2: // Farmácia
+        targetOffset = 1800;
+        break;
+      case 3: // Cuidados Pessoais
+        targetOffset = 2300;
+        break;
+      case 4: // Mercado
+        targetOffset = 2800;
+        break;
+      case 5: // Perfumaria
+        targetOffset = 3300;
         break;
     }
     
@@ -480,7 +670,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 ),
                 
                 const SliverToBoxAdapter(
-                  child: SizedBox(height: 32),
+                  child: SizedBox(height: 16),
                 ),
                 
                 // Produtos em Destaque
@@ -489,7 +679,16 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 ),
                 
                 const SliverToBoxAdapter(
-                  child: SizedBox(height: 32),
+                  child: SizedBox(height: 16),
+                ),
+                
+                // Bebidas
+                SliverToBoxAdapter(
+                  child: _buildBebidas(),
+                ),
+                
+                const SliverToBoxAdapter(
+                  child: SizedBox(height: 16),
                 ),
                 
                 // Farmácia
@@ -498,12 +697,30 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 ),
                 
                 const SliverToBoxAdapter(
-                  child: SizedBox(height: 32),
+                  child: SizedBox(height: 16),
+                ),
+                
+                // Cuidados Pessoais
+                SliverToBoxAdapter(
+                  child: _buildCuidadosPessoais(),
+                ),
+                
+                const SliverToBoxAdapter(
+                  child: SizedBox(height: 16),
                 ),
                 
                 // Mercado
                 SliverToBoxAdapter(
                   child: _buildMercado(),
+                ),
+                
+                const SliverToBoxAdapter(
+                  child: SizedBox(height: 16),
+                ),
+                
+                // Perfumaria
+                SliverToBoxAdapter(
+                  child: _buildPerfumaria(),
                 ),
                 
                 const SliverToBoxAdapter(
@@ -805,12 +1022,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         // ✅ Aplica filtro de busca - agora retorna Map<Product, String?>
         final searchFilteredMap = _filterFeaturedProducts(featuredProducts);
 
-        // Aplica filtro de categoria selecionada
-        final filteredMap = catalog.selectedCategory == 'Todos'
+        // Aplica filtro de categoria selecionada (INDEPENDENTE)
+        final filteredMap = _selectedCategoryFeatured == 'Todos'
             ? searchFilteredMap
             : Map.fromEntries(
                 searchFilteredMap.entries.where(
-                  (entry) => entry.key.category == catalog.selectedCategory
+                  (entry) => entry.key.category == _selectedCategoryFeatured
                 )
               );
 
@@ -818,6 +1035,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         if (_searchQuery.isNotEmpty && filteredMap.isEmpty) {
           return const SizedBox.shrink();
         }
+
+        // Filtros de categoria dinâmicos (apenas categorias de Destaque)
+        final categoriesForSection = catalog.availableCategories
+            .where((c) => _featuredAllowed.contains(_normalizeText(c)))
+            .toList();
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -841,17 +1063,17 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             ),
             const SizedBox(height: 16),
 
-            // Filtros de categoria dinâmicos
-            if (catalog.availableCategories.isNotEmpty)
+            // Filtros de categoria
+            if (categoriesForSection.isNotEmpty)
               SizedBox(
                 height: 48,
                 child: ListView.builder(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   scrollDirection: Axis.horizontal,
-                  itemCount: catalog.availableCategories.length,
+                  itemCount: categoriesForSection.length,
                   itemBuilder: (context, index) {
-                    final category = catalog.availableCategories[index];
-                    final isSelected = catalog.selectedCategory == category;
+                    final category = categoriesForSection[index];
+                    final isSelected = _selectedCategoryFeatured == category;
 
                     return Padding(
                       padding: const EdgeInsets.only(right: 8),
@@ -859,7 +1081,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         selected: isSelected,
                         label: Text(category),
                         onSelected: (selected) {
-                          catalog.selectCategory(category);
+                          setState(() {
+                            _selectedCategoryFeatured = category;
+                          });
                         },
                         backgroundColor: const Color(0xFF033D35),
                         selectedColor: const Color(0xFF74241F),
@@ -969,12 +1193,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         // ✅ Aplica filtro de busca - agora retorna Map<Product, String?>
         final searchFilteredMap = _filterPharmacyProducts(pharmacyProducts);
 
-        // Aplica filtro de categoria selecionada
-        final filteredMap = catalog.selectedCategory == 'Todos'
+        // Aplica filtro de categoria selecionada (INDEPENDENTE)
+        final filteredMap = _selectedCategoryPharmacy == 'Todos'
             ? searchFilteredMap
             : Map.fromEntries(
                 searchFilteredMap.entries.where(
-                  (entry) => entry.key.category == catalog.selectedCategory
+                  (entry) => entry.key.category == _selectedCategoryPharmacy
                 )
               );
 
@@ -987,6 +1211,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         if (pharmacyProducts.isEmpty && !catalog.pharmacyProductsLoading) {
           return const SizedBox.shrink();
         }
+
+        // Filtros de categoria dinâmicos (apenas categorias de Farmácia)
+        final categoriesForSection = catalog.availableCategories
+            .where((c) => _pharmacyAllowed.contains(_normalizeText(c)))
+            .toList();
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1011,17 +1240,16 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             ),
             const SizedBox(height: 16),
 
-            // Filtros de categoria dinâmicos
-            if (catalog.availableCategories.isNotEmpty)
+            if (categoriesForSection.isNotEmpty)
               SizedBox(
                 height: 48,
                 child: ListView.builder(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   scrollDirection: Axis.horizontal,
-                  itemCount: catalog.availableCategories.length,
+                  itemCount: categoriesForSection.length,
                   itemBuilder: (context, index) {
-                    final category = catalog.availableCategories[index];
-                    final isSelected = catalog.selectedCategory == category;
+                    final category = categoriesForSection[index];
+                    final isSelected = _selectedCategoryPharmacy == category;
 
                     return Padding(
                       padding: const EdgeInsets.only(right: 8),
@@ -1029,7 +1257,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         selected: isSelected,
                         label: Text(category),
                         onSelected: (selected) {
-                          catalog.selectCategory(category);
+                          setState(() {
+                            _selectedCategoryPharmacy = category;
+                          });
                         },
                         backgroundColor: const Color(0xFF033D35),
                         selectedColor: const Color(0xFF74241F),
@@ -1139,12 +1369,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         // ✅ Aplica filtro de busca - agora retorna Map<Product, String?>
         final searchFilteredMap = _filterMarketProducts(marketProducts);
 
-        // Aplica filtro de categoria selecionada
-        final filteredMap = catalog.selectedCategory == 'Todos'
+        // Aplica filtro de categoria selecionada (INDEPENDENTE)
+        final filteredMap = _selectedCategoryMarket == 'Todos'
             ? searchFilteredMap
             : Map.fromEntries(
                 searchFilteredMap.entries.where(
-                  (entry) => entry.key.category == catalog.selectedCategory
+                  (entry) => entry.key.category == _selectedCategoryMarket
                 )
               );
 
@@ -1157,6 +1387,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         if (marketProducts.isEmpty && !catalog.marketProductsLoading) {
           return const SizedBox.shrink();
         }
+
+        // Filtros de categoria dinâmicos (apenas categorias de Mercado)
+        final categoriesForSection = catalog.availableCategories
+            .where((c) => _marketAllowed.contains(_normalizeText(c)))
+            .toList();
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1181,17 +1416,16 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             ),
             const SizedBox(height: 16),
 
-            // Filtros de categoria dinâmicos
-            if (catalog.availableCategories.isNotEmpty)
+            if (categoriesForSection.isNotEmpty)
               SizedBox(
                 height: 48,
                 child: ListView.builder(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   scrollDirection: Axis.horizontal,
-                  itemCount: catalog.availableCategories.length,
+                  itemCount: categoriesForSection.length,
                   itemBuilder: (context, index) {
-                    final category = catalog.availableCategories[index];
-                    final isSelected = catalog.selectedCategory == category;
+                    final category = categoriesForSection[index];
+                    final isSelected = _selectedCategoryMarket == category;
 
                     return Padding(
                       padding: const EdgeInsets.only(right: 8),
@@ -1199,7 +1433,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         selected: isSelected,
                         label: Text(category),
                         onSelected: (selected) {
-                          catalog.selectCategory(category);
+                          setState(() {
+                            _selectedCategoryMarket = category;
+                          });
                         },
                         backgroundColor: const Color(0xFF033D35),
                         selectedColor: const Color(0xFF74241F),
@@ -1269,6 +1505,501 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               )
             
             // Carrossel de produtos de mercado
+            else if (filteredMap.isEmpty)
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(32),
+                  child: Column(
+                    children: [
+                      const Icon(
+                        Icons.search_off,
+                        size: 64,
+                        color: Color(0xFFE39110),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        _searchQuery.isNotEmpty 
+                            ? 'Nenhum produto encontrado para "$_searchQuery"'
+                            : 'Nenhum produto encontrado',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontSize: 16, color: Colors.white70),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            else
+              _buildProductCarousel(filteredMap, catalog),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildBebidas() {
+    return Consumer<CatalogProvider>(
+      builder: (context, catalog, child) {
+        final drinksProducts = catalog.drinksProducts;
+
+        final searchFilteredMap = _filterDrinksProducts(drinksProducts);
+
+        final filteredMap = _selectedCategoryDrinks == 'Todos'
+            ? searchFilteredMap
+            : Map.fromEntries(
+                searchFilteredMap.entries.where(
+                  (entry) => entry.key.category == _selectedCategoryDrinks
+                )
+              );
+
+        if (_searchQuery.isNotEmpty && filteredMap.isEmpty) {
+          return const SizedBox.shrink();
+        }
+
+        if (drinksProducts.isEmpty && !catalog.drinksProductsLoading) {
+          return const SizedBox.shrink();
+        }
+
+        // Filtros de categoria dinâmicos (apenas categorias de Bebidas)
+        final categoriesForSection = catalog.availableCategories
+            .where((c) => _drinksAllowed.contains(_normalizeText(c)))
+            .toList();
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                children: [
+                  Icon(Icons.local_drink, color: Color(0xFFE39110), size: 28),
+                  SizedBox(width: 8),
+                  Text(
+                    'Bebidas',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            if (categoriesForSection.isNotEmpty)
+              SizedBox(
+                height: 48,
+                child: ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  scrollDirection: Axis.horizontal,
+                  itemCount: categoriesForSection.length,
+                  itemBuilder: (context, index) {
+                    final category = categoriesForSection[index];
+                    final isSelected = _selectedCategoryDrinks == category;
+
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: FilterChip(
+                        selected: isSelected,
+                        label: Text(category),
+                        onSelected: (selected) {
+                          setState(() {
+                            _selectedCategoryDrinks = category;
+                          });
+                        },
+                        backgroundColor: const Color(0xFF033D35),
+                        selectedColor: const Color(0xFF74241F),
+                        labelStyle: TextStyle(
+                          color: isSelected ? Colors.white : const Color(0xFFE39110),
+                          fontWeight: FontWeight.w500,
+                        ),
+                        side: const BorderSide(
+                          color: Color(0xFFE39110),
+                          width: 1,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+
+            const SizedBox(height: 16),
+
+            if (catalog.drinksProductsLoading)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(32),
+                  child: CircularProgressIndicator(
+                    color: Color(0xFFE39110),
+                  ),
+                ),
+              )
+            else if (catalog.drinksProductsError != null)
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(32),
+                  child: Column(
+                    children: [
+                      const Icon(
+                        Icons.error_outline,
+                        size: 64,
+                        color: Color(0xFFE39110),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        catalog.drinksProductsError!,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: Colors.white70),
+                      ),
+                      const SizedBox(height: 16),
+                      ElevatedButton.icon(
+                        onPressed: () {
+                          catalog.loadDrinksProducts(force: true);
+                        },
+                        icon: const Icon(Icons.refresh),
+                        label: const Text('Tentar Novamente'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF74241F),
+                          foregroundColor: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            else if (filteredMap.isEmpty)
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(32),
+                  child: Column(
+                    children: [
+                      const Icon(
+                        Icons.search_off,
+                        size: 64,
+                        color: Color(0xFFE39110),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        _searchQuery.isNotEmpty 
+                            ? 'Nenhum produto encontrado para "$_searchQuery"'
+                            : 'Nenhum produto encontrado',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontSize: 16, color: Colors.white70),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            else
+              _buildProductCarousel(filteredMap, catalog),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildCuidadosPessoais() {
+    return Consumer<CatalogProvider>(
+      builder: (context, catalog, child) {
+        final personalCareProducts = catalog.personalCareProducts;
+
+        final searchFilteredMap = _filterPersonalCareProducts(personalCareProducts);
+
+        final filteredMap = _selectedCategoryPersonalCare == 'Todos'
+            ? searchFilteredMap
+            : Map.fromEntries(
+                searchFilteredMap.entries.where(
+                  (entry) => entry.key.category == _selectedCategoryPersonalCare
+                )
+              );
+
+        if (_searchQuery.isNotEmpty && filteredMap.isEmpty) {
+          return const SizedBox.shrink();
+        }
+
+        if (personalCareProducts.isEmpty && !catalog.personalCareProductsLoading) {
+          return const SizedBox.shrink();
+        }
+
+        // Filtros de categoria dinâmicos (apenas categorias de Cuidados Pessoais)
+        final categoriesForSection = catalog.availableCategories
+            .where((c) => _personalCareAllowed.contains(_normalizeText(c)))
+            .toList();
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                children: [
+                  Icon(Icons.face, color: Color(0xFFE39110), size: 28),
+                  SizedBox(width: 8),
+                  Text(
+                    'Cuidados Pessoais',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            if (categoriesForSection.isNotEmpty)
+              SizedBox(
+                height: 48,
+                child: ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  scrollDirection: Axis.horizontal,
+                  itemCount: categoriesForSection.length,
+                  itemBuilder: (context, index) {
+                    final category = categoriesForSection[index];
+                    final isSelected = _selectedCategoryPersonalCare == category;
+
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: FilterChip(
+                        selected: isSelected,
+                        label: Text(category),
+                        onSelected: (selected) {
+                          setState(() {
+                            _selectedCategoryPersonalCare = category;
+                          });
+                        },
+                        backgroundColor: const Color(0xFF033D35),
+                        selectedColor: const Color(0xFF74241F),
+                        labelStyle: TextStyle(
+                          color: isSelected ? Colors.white : const Color(0xFFE39110),
+                          fontWeight: FontWeight.w500,
+                        ),
+                        side: const BorderSide(
+                          color: Color(0xFFE39110),
+                          width: 1,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+
+            const SizedBox(height: 16),
+
+            if (catalog.personalCareProductsLoading)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(32),
+                  child: CircularProgressIndicator(
+                    color: Color(0xFFE39110),
+                  ),
+                ),
+              )
+            else if (catalog.personalCareProductsError != null)
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(32),
+                  child: Column(
+                    children: [
+                      const Icon(
+                        Icons.error_outline,
+                        size: 64,
+                        color: Color(0xFFE39110),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        catalog.personalCareProductsError!,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: Colors.white70),
+                      ),
+                      const SizedBox(height: 16),
+                      ElevatedButton.icon(
+                        onPressed: () {
+                          catalog.loadPersonalCareProducts(force: true);
+                        },
+                        icon: const Icon(Icons.refresh),
+                        label: const Text('Tentar Novamente'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF74241F),
+                          foregroundColor: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            else if (filteredMap.isEmpty)
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(32),
+                  child: Column(
+                    children: [
+                      const Icon(
+                        Icons.search_off,
+                        size: 64,
+                        color: Color(0xFFE39110),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        _searchQuery.isNotEmpty 
+                            ? 'Nenhum produto encontrado para "$_searchQuery"'
+                            : 'Nenhum produto encontrado',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontSize: 16, color: Colors.white70),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            else
+              _buildProductCarousel(filteredMap, catalog),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildPerfumaria() {
+    return Consumer<CatalogProvider>(
+      builder: (context, catalog, child) {
+        final perfumeryProducts = catalog.perfumeryProducts;
+
+        final searchFilteredMap = _filterPerfumeryProducts(perfumeryProducts);
+
+        final filteredMap = _selectedCategoryPerfumery == 'Todos'
+            ? searchFilteredMap
+            : Map.fromEntries(
+                searchFilteredMap.entries.where(
+                  (entry) => entry.key.category == _selectedCategoryPerfumery
+                )
+              );
+
+        if (_searchQuery.isNotEmpty && filteredMap.isEmpty) {
+          return const SizedBox.shrink();
+        }
+
+        if (perfumeryProducts.isEmpty && !catalog.perfumeryProductsLoading) {
+          return const SizedBox.shrink();
+        }
+
+        // Filtros de categoria dinâmicos (apenas categorias de Perfumaria)
+        final categoriesForSection = catalog.availableCategories
+            .where((c) => _perfumeryAllowed.contains(_normalizeText(c)))
+            .toList();
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                children: [
+                  Icon(Icons.spa, color: Color(0xFFE39110), size: 28),
+                  SizedBox(width: 8),
+                  Text(
+                    'Perfumaria',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            if (categoriesForSection.isNotEmpty)
+              SizedBox(
+                height: 48,
+                child: ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  scrollDirection: Axis.horizontal,
+                  itemCount: categoriesForSection.length,
+                  itemBuilder: (context, index) {
+                    final category = categoriesForSection[index];
+                    final isSelected = _selectedCategoryPerfumery == category;
+
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: FilterChip(
+                        selected: isSelected,
+                        label: Text(category),
+                        onSelected: (selected) {
+                          setState(() {
+                            _selectedCategoryPerfumery = category;
+                          });
+                        },
+                        backgroundColor: const Color(0xFF033D35),
+                        selectedColor: const Color(0xFF74241F),
+                        labelStyle: TextStyle(
+                          color: isSelected ? Colors.white : const Color(0xFFE39110),
+                          fontWeight: FontWeight.w500,
+                        ),
+                        side: const BorderSide(
+                          color: Color(0xFFE39110),
+                          width: 1,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+
+            const SizedBox(height: 16),
+
+            if (catalog.perfumeryProductsLoading)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(32),
+                  child: CircularProgressIndicator(
+                    color: Color(0xFFE39110),
+                  ),
+                ),
+              )
+            else if (catalog.perfumeryProductsError != null)
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(32),
+                  child: Column(
+                    children: [
+                      const Icon(
+                        Icons.error_outline,
+                        size: 64,
+                        color: Color(0xFFE39110),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        catalog.perfumeryProductsError!,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: Colors.white70),
+                      ),
+                      const SizedBox(height: 16),
+                      ElevatedButton.icon(
+                        onPressed: () {
+                          catalog.loadPerfumeryProducts(force: true);
+                        },
+                        icon: const Icon(Icons.refresh),
+                        label: const Text('Tentar Novamente'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF74241F),
+                          foregroundColor: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              )
             else if (filteredMap.isEmpty)
               Center(
                 child: Padding(
@@ -1381,7 +2112,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         return Column(
           children: [
             SizedBox(
-              height: 840, // ✅ Reduzido para 840
+              height: 700,
               child: PageView.builder(
                 itemCount: pages.length,
                 onPageChanged: (index) {
@@ -1445,8 +2176,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 },
               ),
             ),
-            
-            const SizedBox(height: 8), // ✅ Reduzido de 16 para 8
             
             // Indicadores de página (bolinhas)
             Row(
@@ -1766,11 +2495,27 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                       },
                     ),
                     _buildDrawerItem(
+                      icon: Icons.local_drink,
+                      title: 'Bebidas',
+                      onTap: () {
+                        Navigator.pop(context);
+                        _scrollToSection(1);
+                      },
+                    ),
+                    _buildDrawerItem(
                       icon: Icons.local_pharmacy,
                       title: 'Farmácia',
                       onTap: () {
                         Navigator.pop(context);
-                        _scrollToSection(1);
+                        _scrollToSection(2);
+                      },
+                    ),
+                    _buildDrawerItem(
+                      icon: Icons.face,
+                      title: 'Cuidados Pessoais',
+                      onTap: () {
+                        Navigator.pop(context);
+                        _scrollToSection(3);
                       },
                     ),
                     _buildDrawerItem(
@@ -1778,7 +2523,15 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                       title: 'Mercado',
                       onTap: () {
                         Navigator.pop(context);
-                        _scrollToSection(2);
+                        _scrollToSection(4);
+                      },
+                    ),
+                    _buildDrawerItem(
+                      icon: Icons.spa,
+                      title: 'Perfumaria',
+                      onTap: () {
+                        Navigator.pop(context);
+                        _scrollToSection(5);
                       },
                     ),
                     const Divider(color: Color(0xFFE39110), height: 32),

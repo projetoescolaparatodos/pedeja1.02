@@ -607,6 +607,15 @@ class CartPage extends StatelessWidget {
             .map((entry) => entry.key)
             .toList() ?? [];
 
+        // Calcula subtotal e taxa de entrega
+        double subtotal = 0.0;
+        double totalDeliveryFee = 0.0;
+        
+        final itemsByRestaurant = cart.itemsByRestaurant;
+        for (var restaurantId in itemsByRestaurant.keys) {
+          subtotal += cart.getRestaurantSubtotal(restaurantId);
+        }
+
         return Column(
           children: [
             const SizedBox(height: 16),
@@ -625,6 +634,77 @@ class CartPage extends StatelessWidget {
               ),
               child: Column(
                 children: [
+                  // Subtotal
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Subtotal',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.white70,
+                        ),
+                      ),
+                      Text(
+                        'R\$ ${subtotal.toStringAsFixed(2).replaceAll('.', ',')}',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.white70,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+
+                  // Taxa de Entrega (será calculado dinamicamente)
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Taxa de Entrega',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.white70,
+                        ),
+                      ),
+                      FutureBuilder<double>(
+                        future: _calculateTotalDeliveryFee(cart),
+                        builder: (context, snapshot) {
+                          final deliveryFee = snapshot.data ?? 0.0;
+                          totalDeliveryFee = deliveryFee;
+                          
+                          if (deliveryFee == 0.0) {
+                            return const Text(
+                              'Grátis!',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500,
+                                color: Color(0xFF66BB6A),
+                              ),
+                            );
+                          }
+                          
+                          return Text(
+                            'R\$ ${deliveryFee.toStringAsFixed(2).replaceAll('.', ',')}',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.white70,
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 12),
+                  const Divider(color: Color(0xFFE39110), thickness: 1),
+                  const SizedBox(height: 12),
+
+                  // Total Final
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -636,13 +716,21 @@ class CartPage extends StatelessWidget {
                           color: Color(0xFFE39110),
                         ),
                       ),
-                      Text(
-                        'R\$ ${cart.total.toStringAsFixed(2).replaceAll('.', ',')}',
-                        style: const TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFFE39110),
-                        ),
+                      FutureBuilder<double>(
+                        future: _calculateTotalDeliveryFee(cart),
+                        builder: (context, snapshot) {
+                          final deliveryFee = snapshot.data ?? 0.0;
+                          final totalAmount = subtotal + deliveryFee;
+                          
+                          return Text(
+                            'R\$ ${totalAmount.toStringAsFixed(2).replaceAll('.', ',')}',
+                            style: const TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFFE39110),
+                            ),
+                          );
+                        },
                       ),
                     ],
                   ),
@@ -728,7 +816,24 @@ class CartPage extends StatelessWidget {
     );
   }
 
-  /// 🔍 Processa checkout com validação de perfil completo
+  /// � Calcula o total de taxa de entrega de todos os restaurantes
+  Future<double> _calculateTotalDeliveryFee(CartState cart) async {
+    double totalFee = 0.0;
+    final itemsByRestaurant = cart.itemsByRestaurant;
+
+    for (var restaurantId in itemsByRestaurant.keys) {
+      try {
+        final restaurant = await _fetchRestaurant(restaurantId);
+        totalFee += restaurant?.deliveryFee ?? 0.0;
+      } catch (e) {
+        debugPrint('Erro ao buscar taxa de entrega do restaurante: $e');
+      }
+    }
+
+    return totalFee;
+  }
+
+  /// �🔍 Processa checkout com validação de perfil completo
   static Future<void> _processCheckout(BuildContext context) async {
     debugPrint('🛒 [CHECKOUT] Iniciando processo de checkout');
     

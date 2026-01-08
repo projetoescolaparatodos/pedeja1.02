@@ -16,6 +16,7 @@
     this.updatedAt,
     this.apiIsOpen,
     this.minimumOrder = 0.0,
+    this.deliveryFee = 0.0,
   });
 
   final String id;
@@ -34,6 +35,7 @@
   final DateTime? updatedAt;
   final bool? apiIsOpen;
   final double minimumOrder;
+  final double deliveryFee;
 
   bool get isOpen => apiIsOpen ?? (approved && isActive && paymentStatus.toLowerCase() == 'adimplente');
   bool get canAcceptOrders => isOpen;
@@ -68,6 +70,7 @@
           : null,
       apiIsOpen: apiIsOpenValue,
       minimumOrder: (json['minimumOrder'] ?? 0).toDouble(),
+      deliveryFee: (json['deliveryFee'] ?? 0).toDouble(),
     );
   }
 
@@ -89,6 +92,7 @@
       'updatedAt': updatedAt?.toIso8601String(),
       'apiIsOpen': apiIsOpen,
       'minimumOrder': minimumOrder,
+      'deliveryFee': deliveryFee,
     };
   }
 }

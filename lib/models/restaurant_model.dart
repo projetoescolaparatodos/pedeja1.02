@@ -17,6 +17,7 @@
     this.apiIsOpen,
     this.minimumOrder = 0.0,
     this.deliveryFee = 0.0,
+    this.customerDeliveryFee,
   });
 
   final String id;
@@ -36,6 +37,17 @@
   final bool? apiIsOpen;
   final double minimumOrder;
   final double deliveryFee;
+  final double? customerDeliveryFee;
+
+  // Getter para obter a taxa que será exibida/cobrada ao cliente
+  double get displayDeliveryFee {
+    return customerDeliveryFee ?? deliveryFee;
+  }
+
+  // Verifica se está em modo parcial (restaurante subsidia parte)
+  bool get isPartialDeliveryMode {
+    return customerDeliveryFee != null && customerDeliveryFee! < deliveryFee;
+  }
 
   bool get isOpen => apiIsOpen ?? (approved && isActive && paymentStatus.toLowerCase() == 'adimplente');
   bool get canAcceptOrders => isOpen;
@@ -71,6 +83,9 @@
       apiIsOpen: apiIsOpenValue,
       minimumOrder: (json['minimumOrder'] ?? 0).toDouble(),
       deliveryFee: (json['deliveryFee'] ?? 0).toDouble(),
+      customerDeliveryFee: json['customerDeliveryFee'] != null 
+          ? (json['customerDeliveryFee'] as num).toDouble() 
+          : null,
     );
   }
 
@@ -93,6 +108,7 @@
       'apiIsOpen': apiIsOpen,
       'minimumOrder': minimumOrder,
       'deliveryFee': deliveryFee,
+      'customerDeliveryFee': customerDeliveryFee,
     };
   }
 }

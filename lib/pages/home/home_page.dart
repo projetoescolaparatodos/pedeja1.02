@@ -2051,7 +2051,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             crossAxisCount: 2,
             crossAxisSpacing: 16,
             mainAxisSpacing: 16,
-            childAspectRatio: 0.75,
+            childAspectRatio: 0.85,
           ),
           itemCount: productEntries.length,
           itemBuilder: (context, index) {
@@ -2131,7 +2131,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         crossAxisCount: 2,
                         crossAxisSpacing: 16,
                         mainAxisSpacing: 16,
-                        childAspectRatio: 0.75,
+                        childAspectRatio: 0.85,
                       ),
                       itemCount: pageEntries.length,
                       itemBuilder: (context, index) {

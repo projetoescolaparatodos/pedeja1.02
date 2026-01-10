@@ -20,6 +20,7 @@ class BackendOrderService {
     String? userPhone,
     double subtotal = 0.0,
     double deliveryFee = 0.0,
+    Map<String, dynamic>? delivery, // ✅ NOVO: objeto delivery completo
   }) async {
     try {
       debugPrint('📦 [BackendOrderService] Criando pedido na API...');
@@ -54,6 +55,7 @@ class BackendOrderService {
           'subtotal': subtotal > 0 ? subtotal : total,
           'deliveryFee': deliveryFee,
           'totalAmount': total,
+          if (delivery != null) 'delivery': delivery, // ✅ Objeto completo
           'deliveryAddress': deliveryAddress,
           'payment': payment,
           if (userName != null) 'userName': userName,

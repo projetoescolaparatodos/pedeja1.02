@@ -1,7 +1,7 @@
 # 📱 PedeJá - Documentação Completa do Projeto
 
-> **Última Atualização**: 04 de Janeiro de 2026  
-> **Versão Atual**: 1.0.35+35  
+> **Última Atualização**: 10 de Janeiro de 2026  
+> **Versão Atual**: 1.0.37+37  
 > **Status**: Em Produção
 
 ## 📋 Índice
@@ -457,7 +457,103 @@ CachedNetworkImage(
 
 ---
 
-## � Changelog - Janeiro 2026
+## 📅 Changelog - Janeiro 2026
+
+### 🔐 v1.0.37+37 - Auto-Login via Fallback JWT (10/01/2026)
+
+**Problema Original**:
+- ❌ Firebase Auth não persiste sessão no Android após app restart
+- ❌ `FirebaseAuth.currentUser` retorna `null` mesmo após login bem-sucedido
+- ❌ Usuário obrigado a fazer login toda vez que abre o app
+
+**Investigação**:
+1. **Tentativa 1**: Adicionar `android:allowBackup="true"` no AndroidManifest
+   - ❌ Não resolveu - Firebase Auth continua retornando null
+   
+2. **Tentativa 2**: Usar `getIdToken(true)` com forceRefresh
+   - ✅ Token válido obtido durante login
+   - ❌ Mas Firebase Auth ainda perde sessão após restart
+
+**Solução Implementada: Sistema de Fallback JWT**:
+
+```dart
+// lib/state/auth_state.dart - _initAuth()
+// FASE 1: Verificar Firebase Auth (esperado)
+final currentUser = FirebaseAuth.instance.currentUser;
+
+// FASE 2: FALLBACK - Se Firebase NULL, usar JWT salvo
+if (currentUser == null) {
+  final savedUid = prefs.getString('firebase_uid');
+  final savedToken = prefs.getString('jwtToken');
+  
+  if (savedUid != null && savedToken != null) {
+    // Restaurar sessão via JWT salvo
+    await _authService.loadSavedCredentials();
+    await _loadUserData(skipJwtRefresh: true);
+    // ✅ Auto-login bem-sucedido!
+  }
+}
+```
+
+**Fluxo de Auto-Login**:
+1. App inicia → `_initAuth()` verifica Firebase Auth
+2. Firebase retorna `null` (bug Android)
+3. Sistema detecta `firebase_uid` + `jwtToken` salvos
+4. Carrega JWT do SharedPreferences
+5. Busca dados do usuário via backend usando JWT
+6. Restaura estado completo da aplicação
+7. ✅ Usuário vai direto para HomePage
+
+**Arquivos Modificados**:
+- `lib/state/auth_state.dart`: Lógica de fallback em `_initAuth()`
+- `lib/services/auth_service.dart`: 
+  - Salvar `firebase_uid` durante login
+  - `getIdToken(true)` para forçar refresh do token
+- `android/app/src/main/AndroidManifest.xml`: 
+  - `android:allowBackup="true"`
+  - `android:fullBackupContent="true"`
+
+**Validação iOS**:
+- ✅ Sistema compatível com iOS
+- ✅ `IOSLogoutHandler` preservado e funcional
+- ✅ Flag `manual_logout` previne auto-login após logout manual
+- ✅ Não retorna bug antigo de "impossível sair da conta"
+
+**Funcionamento no iOS**:
+```dart
+// iOS NORMAL: Firebase Auth PERSISTE nativamente via Keychain
+// - currentUser != null → usa Firebase normalmente
+// - Fallback JWT só ativa se Firebase falhar
+
+// iOS após LOGOUT MANUAL:
+// - Flag 'manual_logout' setada pelo IOSLogoutHandler
+// - Previne fallback JWT de restaurar sessão
+// - App vai para OnboardingPage corretamente
+```
+
+**Logs de Sucesso**:
+```
+❌ [MAIN] Nenhum usuário autenticado encontrado no Firebase Auth
+🔍 [AuthState] FirebaseAuth.currentUser: null
+🔍 [AuthState] Verificando fallback - UID salvo: yy7zPGZry3TgnBAYEMvGVL9lWXK2
+🔍 [AuthState] JWT salvo: SIM
+🔄 [AuthState] Firebase perdeu sessão mas temos JWT - tentando restaurar
+✅ [AuthState] Sessão restaurada via JWT salvo!
+✅ [AuthWrapper] Usuário autenticado, indo para HomePage
+```
+
+**Resultados**:
+- ✅ Auto-login funcionando perfeitamente no Android via fallback JWT
+- ✅ iOS continua funcionando normalmente (Firebase nativo + fallback)
+- ✅ Logout manual funciona corretamente (flag previne auto-login)
+- ✅ Sistema robusto com dupla camada de segurança
+- ✅ Experiência de usuário melhorada (sem login repetido)
+
+**Build**:
+- APK: `build\app\outputs\flutter-apk\app-release.apk` (91.6MB)
+- Tempo: 306.2s
+
+---
 
 ### 🔧 v1.0.35+35 - Correções Multi-Marca + Nova Splash (04/01/2026)
 

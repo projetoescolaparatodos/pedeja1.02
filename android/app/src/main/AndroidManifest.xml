@@ -28,6 +28,8 @@
         android:label="PedeJá"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
+        android:allowBackup="true"
+        android:fullBackupContent="true"
         android:enableOnBackInvokedCallback="true">
         <activity
             android:name=".MainActivity"

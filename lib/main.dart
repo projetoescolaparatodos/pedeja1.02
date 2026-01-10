@@ -33,7 +33,8 @@ void main() async {
 
   debugPrint('🔥 [MAIN] Firebase inicializado com sucesso');
   
-  // 🔍 DEBUG: Verificar se há usuário autenticado ANTES de qualquer outra coisa
+
+  // �🔍 DEBUG: Verificar se há usuário autenticado ANTES de qualquer outra coisa
   final currentUser = FirebaseAuth.instance.currentUser;
   if (currentUser != null) {
     debugPrint('✅ [MAIN] Usuário encontrado no Firebase Auth: ${currentUser.email}');

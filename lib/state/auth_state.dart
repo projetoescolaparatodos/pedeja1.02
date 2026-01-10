@@ -42,6 +42,22 @@ class AuthState extends ChangeNotifier {
   Future<void> _initAuth() async {
     debugPrint('🔧 [AuthState] _initAuth() chamado - verificando sessão Firebase');
     
+    // ⚡ Configurar listener ANTES de qualquer operação assíncrona
+    // Isso garante captura de eventos durante inicialização
+    FirebaseAuth.instance.authStateChanges().listen((User? user) {
+      debugPrint('🔔 [AuthState] authStateChanges: ${user?.email}');
+      if (user != null) {
+        _currentUser = user;
+        notifyListeners();
+      } else {
+        // Se Firebase deslogou, limpar tudo
+        _currentUser = null;
+        _userData = null;
+        _restaurantData = null;
+        notifyListeners();
+      }
+    });
+    
     _isLoading = true;
     notifyListeners();
 
@@ -60,6 +76,38 @@ class AuthState extends ChangeNotifier {
       
       // Verificar se há usuário no Firebase (persistência nativa do Firebase)
       final currentUser = FirebaseAuth.instance.currentUser;
+      
+      debugPrint('🔍 [AuthState] FirebaseAuth.currentUser: ${currentUser?.email ?? "null"}');
+      debugPrint('🔍 [AuthState] currentUser?.uid: ${currentUser?.uid ?? "null"}');
+      
+      // 🔐 FALLBACK: Se Firebase não tem sessão, mas temos JWT salvo
+      // Tentar usar JWT para restaurar autenticação
+      if (currentUser == null) {
+        final savedUid = prefs.getString('firebase_uid');
+        final savedToken = prefs.getString('jwtToken');
+        
+        debugPrint('🔍 [AuthState] Verificando fallback - UID salvo: ${savedUid ?? "null"}');
+        debugPrint('🔍 [AuthState] JWT salvo: ${savedToken != null ? "SIM" : "NÃO"}');
+        
+        if (savedUid != null && savedToken != null) {
+          debugPrint('🔄 [AuthState] Firebase perdeu sessão mas temos JWT - tentando restaurar via backend');
+          
+          // Carregar JWT salvo
+          await _authService.loadSavedCredentials();
+          
+          // Tentar carregar dados do usuário usando JWT
+          try {
+            await _loadUserData(skipJwtRefresh: true);
+            debugPrint('✅ [AuthState] Sessão restaurada via JWT salvo!');
+            return; // Sucesso, sai daqui
+          } catch (e) {
+            debugPrint('❌ [AuthState] Falha ao restaurar via JWT: $e');
+            // Limpar dados inválidos
+            await prefs.remove('firebase_uid');
+            await prefs.remove('jwtToken');
+          }
+        }
+      }
       
       if (currentUser != null) {
         debugPrint('✅ [AuthState] Usuário Firebase encontrado: ${currentUser.email}');
@@ -113,9 +161,7 @@ class AuthState extends ChangeNotifier {
           }
         }
       } else {
-        debugPrint('❌ [AuthState] Nenhum usuário no Firebase - usuário deslogado');
-        // Garantir que não há credenciais salvas
-        await _authService.clearCredentials();
+        debugPrint('❌ [AuthState] Nenhum usuário no Firebase - tela de login');
       }
       
     } catch (e) {
@@ -124,21 +170,6 @@ class AuthState extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
     }
-    
-    // Listener do Firebase para mudanças de autenticação
-    FirebaseAuth.instance.authStateChanges().listen((User? user) {
-      debugPrint('🔔 [AuthState] authStateChanges: ${user?.email}');
-      if (user != null) {
-        _currentUser = user;
-        notifyListeners();
-      } else {
-        // Se Firebase deslogou, limpar tudo
-        _currentUser = null;
-        _userData = null;
-        _restaurantData = null;
-        notifyListeners();
-      }
-    });
   }
 
   /// 💾 Salvar estado de login
@@ -482,7 +513,7 @@ class AuthState extends ChangeNotifier {
       return; // iOS termina aqui
     }
     
-    // 🤖 ANDROID - Código original que funciona (NÃO MODIFICADO)
+    // 🤖 ANDROID - Limpar dados mas preservar JWT se não foi logout manual
     _isLoading = true;
     notifyListeners();
 
@@ -492,11 +523,7 @@ class AuthState extends ChangeNotifier {
       // Marcar logout manual (previne auto-login)
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('manual_logout', true);
-      
-      // Limpar SharedPreferences
-      await prefs.clear();
-      await prefs.setBool('manual_logout', true);
-      debugPrint('✅ SharedPreferences limpo');
+      debugPrint('✅ Flag manual_logout setada');
       
       // Limpar estados locais
       _currentUser = null;
@@ -546,19 +573,15 @@ class AuthState extends ChangeNotifier {
       // Tentar limpar SharedPreferences mesmo com erro
       try {
         await _clearLoginState();
+        // ⚠️ NÃO fazer prefs.clear() - apaga a sessão do Firebase Auth!
+        // Apenas limpar flags específicas
         final prefs = await SharedPreferences.getInstance();
-        await prefs.clear();
+        await prefs.remove('manual_logout');
+        await prefs.remove('jwt_token');
+        await prefs.remove('user_email');
+        await prefs.remove('is_logged_in');
+        debugPrint('✅ [AuthState] Flags de login limpas (Firebase Auth preservado)');
       } catch (_) {}
-      
-      // 🔐 IMPORTANTE: Restaurar persistência mesmo com erro
-      if (Platform.isIOS) {
-        try {
-          await FirebaseAuth.instance.setPersistence(Persistence.LOCAL);
-          debugPrint('✅ [AuthState] Persistência LOCAL restaurada após erro');
-        } catch (_) {
-          debugPrint('⚠️ [AuthState] Não foi possível restaurar persistência');
-        }
-      }
       
       notifyListeners();
     }

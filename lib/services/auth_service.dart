@@ -35,6 +35,14 @@ class AuthService {
       await prefs.setBool('isLoggedIn', true);
       await prefs.setString('userEmail', email);
       await prefs.setString('jwtToken', token);
+      
+      // 🔐 CRÍTICO: Salvar também o Firebase UID para restaurar sessão
+      final firebaseUid = FirebaseAuth.instance.currentUser?.uid;
+      if (firebaseUid != null) {
+        await prefs.setString('firebase_uid', firebaseUid);
+        debugPrint('💾 [AuthService] Firebase UID salvo: $firebaseUid');
+      }
+      
       debugPrint('💾 [AuthService] Credenciais salvas para: $email');
     } catch (e) {
       debugPrint('❌ [AuthService] Erro ao salvar credenciais: $e');
@@ -262,9 +270,9 @@ class AuthService {
         return false;
       }
 
-      // Pegar Firebase ID Token
-      final firebaseToken = await user.getIdToken();
-      debugPrint('🎫 [AuthService] Firebase Token obtido');
+      // Pegar Firebase ID Token (FORÇAR REFRESH para garantir validade)
+      final firebaseToken = await user.getIdToken(true);
+      debugPrint('🎫 [AuthService] Firebase Token obtido (forceRefresh=true)');
 
       // ✅ URL correta da API
       final url = 'https://api-pedeja.vercel.app/api/auth/firebase-token';

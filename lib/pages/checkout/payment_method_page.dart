@@ -31,10 +31,116 @@ class _PaymentMethodPageState extends State<PaymentMethodPage> {
   final BackendOrderService _backendOrderService = BackendOrderService();
   
   String? _selectedMethod;
+  String _deliveryMethod = 'delivery'; // 'delivery' | 'pickup'
+  double? _deliveryFeeAmount; // Taxa que cliente paga
+  double? _totalDeliveryFee;  // Taxa total (entregador recebe)
+  bool _isLoadingDeliveryFee = false;
   bool _needsChange = false;
   final TextEditingController _changeController = TextEditingController();
   bool _isLoading = false;
   String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDeliveryFee();
+  }
+  Future<void> _loadDeliveryFee() async {
+    setState(() {
+      _isLoadingDeliveryFee = true;
+    });
+
+    try {
+      final response = await http.get(
+        Uri.parse('https://api-pedeja.vercel.app/api/restaurants/${widget.restaurantId}'),
+      );
+
+      if (response.statusCode == 200) {
+        final restaurantData = json.decode(response.body);
+        // Armazenar taxa total e taxa do cliente
+        _totalDeliveryFee = (restaurantData['deliveryFee'] ?? 0.0).toDouble();
+        final customerFee = restaurantData['customerDeliveryFee'];
+        _deliveryFeeAmount = (customerFee ?? _totalDeliveryFee).toDouble();
+        debugPrint('💰 Taxa total: R\$ ${_totalDeliveryFee!.toStringAsFixed(2)}');
+        debugPrint('💰 Cliente paga: R\$ ${_deliveryFeeAmount!.toStringAsFixed(2)}');
+      }
+    } catch (e) {
+      debugPrint('⚠️ Erro ao buscar taxa de entrega: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingDeliveryFee = false;
+        });
+      }
+    }
+  }
+
+  List<dynamic> _restaurantItems(CartState cartState) {
+    final allItems = cartState.items;
+    return widget.specificItems ??
+        allItems.where((item) => item.restaurantId == widget.restaurantId).toList();
+  }
+
+  double _calculateSubtotal(List<dynamic> restaurantItems) {
+    return restaurantItems.fold<double>(0, (sum, item) => sum + item.totalPrice);
+  }
+
+  double _effectiveDeliveryFee() {
+    if (_deliveryMethod == 'pickup') return 0.0;
+    return _deliveryFeeAmount ?? 0.0;
+  }
+
+  double _calculateTotal(double subtotal) {
+    return subtotal + _effectiveDeliveryFee();
+  }
+
+  Map<String, dynamic> _buildAddressData(dynamic address, String formattedAddress) {
+    // Sempre usa endereço do usuário, só muda o campo method
+    if (address is Map) {
+      final addressMap = Map<String, dynamic>.from(address);
+      addressMap['method'] = _deliveryMethod; // 'delivery' ou 'pickup'
+      return addressMap;
+    }
+
+    // Fallback para string
+    return {
+      'fullAddress': formattedAddress,
+      'method': _deliveryMethod,
+    };
+  }
+
+  void _validateDeliveryAddressOrThrow(dynamic address) {
+    if (_deliveryMethod == 'pickup') return; // Pickup não precisa validar endereço
+
+    if (address is Map) {
+      final requiredFields = [
+        'street',
+        'number',
+        'neighborhood',
+        'city',
+        'state',
+        'zipCode',
+      ];
+
+      final missing = requiredFields
+          .where((field) => (address[field]?.toString().trim().isEmpty ?? true))
+          .toList();
+
+      if (missing.isNotEmpty) {
+        throw Exception('Complete o endereço: ${missing.join(', ')}');
+      }
+      return;
+    }
+
+    throw Exception('Endereço inválido para entrega. Atualize seu cadastro.');
+  }
+
+  Future<double> _ensureDeliveryFeeLoaded() async {
+    if (_deliveryMethod == 'pickup') return 0.0;
+    if (_deliveryFeeAmount != null) return _deliveryFeeAmount!;
+    await _loadDeliveryFee();
+    return _deliveryFeeAmount ?? 0.0;
+  }
 
   @override
   void dispose() {
@@ -74,36 +180,33 @@ class _PaymentMethodPageState extends State<PaymentMethodPage> {
       final authState = context.read<AuthState>();
 
       // 1. Validar carrinho e filtrar itens deste restaurante
-      final allItems = cartState.items;
-      
-      // Usar itens específicos passados OU filtrar do carrinho pelo restaurantId
-      final restaurantItems = widget.specificItems ?? 
-          allItems.where((item) => item.restaurantId == widget.restaurantId).toList();
-      
+      final restaurantItems = _restaurantItems(cartState);
       if (restaurantItems.isEmpty) {
         throw Exception('Carrinho vazio');
       }
 
       // 2. Validar dados do usuário
       final userData = authState.userData;
-      
       if (userData == null) {
         throw Exception('Dados do usuário não encontrados. Faça login novamente.');
       }
 
-      // Obter endereço
+      // Obter endereço atual do usuário
       var address = userData['address'];
-      String deliveryAddress;
-      
+      String deliveryAddressString;
+
       if (address == null) {
         final addresses = userData['addresses'];
         if (addresses is List && addresses.isNotEmpty) {
-          deliveryAddress = addresses[0].toString();
-        } else {
+          deliveryAddressString = addresses[0].toString();
+          address = addresses[0];
+        } else if (_deliveryMethod == 'delivery') {
           throw Exception('Endereço não cadastrado');
+        } else {
+          deliveryAddressString = 'Retirada no local';
         }
       } else if (address is String) {
-        deliveryAddress = address;
+        deliveryAddressString = address;
       } else if (address is Map) {
         final addressMap = Map<String, dynamic>.from(address);
         final street = addressMap['street']?.toString() ?? '';
@@ -114,13 +217,16 @@ class _PaymentMethodPageState extends State<PaymentMethodPage> {
         final state = addressMap['state']?.toString() ?? '';
         final zipCode = addressMap['zipCode']?.toString() ?? '';
         
-        deliveryAddress = '$street, $number'
+        deliveryAddressString = '$street, $number'
             '${complement.isNotEmpty ? ' - $complement' : ''}'
             ' - $neighborhood, $city - $state'
             ' CEP: $zipCode';
       } else {
         throw Exception('Formato de endereço inválido');
       }
+
+      // 2.1 Validar endereço somente para delivery
+      _validateDeliveryAddressOrThrow(address);
 
       // 3. Converter itens do restaurante (não todos do carrinho)
       final orderItems = restaurantItems.map((cartItem) {
@@ -159,37 +265,42 @@ class _PaymentMethodPageState extends State<PaymentMethodPage> {
         }
       }
 
-      // 5. Calcular total apenas deste restaurante
-      final restaurantTotal = restaurantItems.fold<double>(
-        0, 
-        (sum, item) => sum + item.totalPrice,
-      );
-
-      // 5.5 Buscar taxa de entrega do restaurante
-      double deliveryFeeAmount = 0.0;
-      try {
-        final restaurantResponse = await http.get(
-          Uri.parse('https://api-pedeja.vercel.app/api/restaurants/${widget.restaurantId}'),
-        );
-        if (restaurantResponse.statusCode == 200) {
-          final restaurantData = json.decode(restaurantResponse.body);
-          deliveryFeeAmount = (restaurantData['deliveryFee'] ?? 0.0).toDouble();
-          debugPrint('💰 Taxa de entrega obtida: R\$ ${deliveryFeeAmount.toStringAsFixed(2)}');
-        }
-      } catch (e) {
-        debugPrint('⚠️ Erro ao buscar taxa de entrega: $e');
-      }
-
-      // 6. Preparar endereço formatado
-      Map<String, dynamic> addressData;
+      // 5. Calcular totais
+      final restaurantSubtotal = _calculateSubtotal(restaurantItems);
+      final deliveryFeeAmount = await _ensureDeliveryFeeLoaded();
       
-      if (address is Map) {
-        addressData = Map<String, dynamic>.from(address);
-      } else if (address is String) {
-        addressData = {'fullAddress': address};
+      // Calcular valores de entrega
+      final double totalDeliveryFee = _deliveryMethod == 'pickup' ? 0.0 : (_totalDeliveryFee ?? deliveryFeeAmount);
+      final double customerPaid = _deliveryMethod == 'pickup' ? 0.0 : deliveryFeeAmount;
+      final double restaurantSubsidy = totalDeliveryFee - customerPaid;
+      
+      // Determinar modo
+      String deliveryMode;
+      if (customerPaid == 0) {
+        deliveryMode = 'free';
+      } else if (restaurantSubsidy > 0) {
+        deliveryMode = 'partial';
       } else {
-        addressData = {'fullAddress': deliveryAddress};
+        deliveryMode = 'complete';
       }
+      
+      // Criar objeto delivery
+      final Map<String, dynamic>? deliveryObject = _deliveryMethod == 'pickup' 
+        ? null // Pickup não precisa delivery object
+        : {
+            'totalFee': totalDeliveryFee,
+            'customerPaid': customerPaid,
+            'restaurantSubsidy': restaurantSubsidy,
+            'mode': deliveryMode,
+          };
+      
+      debugPrint('🚚 [Delivery] totalFee: R\$ ${totalDeliveryFee.toStringAsFixed(2)}');
+      debugPrint('🚚 [Delivery] customerPaid: R\$ ${customerPaid.toStringAsFixed(2)}');
+      debugPrint('🚚 [Delivery] restaurantSubsidy: R\$ ${restaurantSubsidy.toStringAsFixed(2)}');
+      debugPrint('🚚 [Delivery] mode: $deliveryMode');
+
+      // 6. Preparar endereço formatado com method
+      final addressData = _buildAddressData(address, deliveryAddressString);
 
       // 7. Criar pedido via API do backend (já salva no Firebase internamente)
       final orderId = await _backendOrderService.createOrder(
@@ -197,9 +308,10 @@ class _PaymentMethodPageState extends State<PaymentMethodPage> {
         restaurantId: widget.restaurantId,
         restaurantName: widget.restaurantName,
         items: orderItems,
-        subtotal: restaurantTotal,
-        deliveryFee: deliveryFeeAmount,
-        total: restaurantTotal + deliveryFeeAmount,
+        subtotal: restaurantSubtotal,
+        deliveryFee: customerPaid,
+        delivery: deliveryObject, // ✅ Objeto delivery completo
+        total: _calculateTotal(restaurantSubtotal),
         deliveryAddress: addressData,
         payment: paymentData,
         userName: userData['name']?.toString(),
@@ -209,7 +321,7 @@ class _PaymentMethodPageState extends State<PaymentMethodPage> {
       debugPrint('✅ Pedido criado via API: $orderId');
 
       // 8. Salvar total ANTES de limpar itens (INCLUINDO taxa de entrega)
-      final totalAmount = restaurantTotal + deliveryFeeAmount;
+      final totalAmount = _calculateTotal(restaurantSubtotal);
 
       // 9. Limpar APENAS os itens deste restaurante do carrinho
       for (var item in restaurantItems) {
@@ -287,6 +399,11 @@ class _PaymentMethodPageState extends State<PaymentMethodPage> {
   @override
   Widget build(BuildContext context) {
     final cartState = context.watch<CartState>();
+    final restaurantItems = _restaurantItems(cartState);
+    final subtotal = _calculateSubtotal(restaurantItems);
+    final deliveryFee = _effectiveDeliveryFee();
+    final total = _calculateTotal(subtotal);
+    final isPickup = _deliveryMethod == 'pickup';
 
     return Scaffold(
       backgroundColor: const Color(0xFF022E28),
@@ -314,7 +431,17 @@ class _PaymentMethodPageState extends State<PaymentMethodPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Resumo do pedido
-                  _buildOrderSummary(cartState),
+                  _buildOrderSummary(
+                    itemCount: restaurantItems.length,
+                    subtotal: subtotal,
+                    deliveryFee: deliveryFee,
+                    total: total,
+                    isPickup: isPickup,
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  _buildDeliveryMethodSelector(isPickup, deliveryFee),
                   
                   const SizedBox(height: 32),
                   
@@ -341,7 +468,7 @@ class _PaymentMethodPageState extends State<PaymentMethodPage> {
                   // Campos de troco (se dinheiro selecionado)
                   if (_selectedMethod == 'cash') ...[
                     const SizedBox(height: 16),
-                    _buildChangeFields(cartState),
+                    _buildChangeFields(total),
                   ],
                   
                   const SizedBox(height: 16),
@@ -427,7 +554,13 @@ class _PaymentMethodPageState extends State<PaymentMethodPage> {
     );
   }
 
-  Widget _buildOrderSummary(CartState cartState) {
+  Widget _buildOrderSummary({
+    required int itemCount,
+    required double subtotal,
+    required double deliveryFee,
+    required double total,
+    required bool isPickup,
+  }) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -456,20 +589,178 @@ class _PaymentMethodPageState extends State<PaymentMethodPage> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                '${cartState.itemCount} ${cartState.itemCount == 1 ? 'item' : 'itens'}',
+                '$itemCount ${itemCount == 1 ? 'item' : 'itens'}',
                 style: const TextStyle(color: Colors.white70),
               ),
-              Text(
-                'R\$ ${cartState.total.toStringAsFixed(2)}',
-                style: const TextStyle(
-                  color: Color(0xFFE39110),
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    'Subtotal: R\$ ${subtotal.toStringAsFixed(2)}',
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontSize: 14,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Taxa: ',
+                        style: TextStyle(
+                          color: Colors.white70,
+                          fontSize: 14,
+                        ),
+                      ),
+                      if (_isLoadingDeliveryFee && !isPickup)
+                        const SizedBox(
+                          height: 16,
+                          width: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Color(0xFFE39110),
+                          ),
+                        )
+                      else
+                        Text(
+                          isPickup
+                              ? 'GRÁTIS (retirada)'
+                              : 'R\$ ${deliveryFee.toStringAsFixed(2)}',
+                          style: TextStyle(
+                            color: isPickup ? Colors.greenAccent : Colors.white70,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Total: R\$ ${total.toStringAsFixed(2)}',
+                    style: const TextStyle(
+                      color: Color(0xFFE39110),
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildDeliveryMethodSelector(bool isPickup, double deliveryFee) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF033D35),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE39110).withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Como quer receber?',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 12),
+          _buildDeliveryMethodTile(
+            title: 'Entrega em casa',
+            subtitle: 'Receba no endereço cadastrado',
+            value: 'delivery',
+            selected: _deliveryMethod == 'delivery',
+            trailing: _isLoadingDeliveryFee
+                ? const SizedBox(
+                    height: 16,
+                    width: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Color(0xFFE39110),
+                    ),
+                  )
+                : Text(
+                    'Taxa: R\$ ${deliveryFee.toStringAsFixed(2)}',
+                    style: const TextStyle(color: Colors.white70),
+                  ),
+          ),
+          const SizedBox(height: 8),
+          _buildDeliveryMethodTile(
+            title: 'Retirada no local',
+            subtitle: 'Você busca no restaurante',
+            value: 'pickup',
+            selected: _deliveryMethod == 'pickup',
+            trailing: const Text(
+              'GRÁTIS',
+              style: TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDeliveryMethodTile({
+    required String title,
+    required String subtitle,
+    required String value,
+    required bool selected,
+    required Widget trailing,
+  }) {
+    return InkWell(
+      onTap: () {
+        setState(() {
+          _deliveryMethod = value;
+          _errorMessage = null;
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        child: Row(
+          children: [
+            Radio<String>(
+              value: value,
+              groupValue: _deliveryMethod,
+              activeColor: const Color(0xFFE39110),
+              onChanged: (_) {
+                setState(() {
+                  _deliveryMethod = value;
+                  _errorMessage = null;
+                });
+              },
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(color: Colors.white70, fontSize: 13),
+                  ),
+                ],
+              ),
+            ),
+            trailing,
+          ],
+        ),
       ),
     );
   }
@@ -557,7 +848,7 @@ class _PaymentMethodPageState extends State<PaymentMethodPage> {
     );
   }
 
-  Widget _buildChangeFields(CartState cartState) {
+  Widget _buildChangeFields(double totalAmount) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -607,7 +898,7 @@ class _PaymentMethodPageState extends State<PaymentMethodPage> {
               decoration: InputDecoration(
                 labelText: 'Vai pagar com quanto?',
                 labelStyle: const TextStyle(color: Colors.white70),
-                hintText: 'Ex: ${(cartState.total + 10).toStringAsFixed(2)}',
+                hintText: 'Ex: ${(totalAmount + 10).toStringAsFixed(2)}',
                 hintStyle: const TextStyle(color: Colors.white38),
                 prefixText: 'R\$ ',
                 prefixStyle: const TextStyle(
@@ -633,7 +924,7 @@ class _PaymentMethodPageState extends State<PaymentMethodPage> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Total: R\$ ${cartState.total.toStringAsFixed(2)}',
+              'Total: R\$ ${totalAmount.toStringAsFixed(2)}',
               style: const TextStyle(
                 color: Colors.white70,
                 fontSize: 14,

@@ -824,7 +824,7 @@ class CartPage extends StatelessWidget {
     for (var restaurantId in itemsByRestaurant.keys) {
       try {
         final restaurant = await _fetchRestaurant(restaurantId);
-        totalFee += restaurant?.deliveryFee ?? 0.0;
+        totalFee += restaurant?.displayDeliveryFee ?? 0.0;
       } catch (e) {
         debugPrint('Erro ao buscar taxa de entrega do restaurante: $e');
       }

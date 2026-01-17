@@ -76,6 +76,9 @@ class _CategoryEstablishmentsPageState
         final filtered = responseList.where((r) {
           if (r is! Map) return false;
 
+          // 🐴 OPERAÇÃO CAVALO DE TROIA: Só mostra restaurantes ativos
+          if (r['isActive'] != true) return false;
+
           final type = (r['type']?.toString() ?? '').toLowerCase();
           if (type.isEmpty) return false;
 
@@ -113,20 +116,20 @@ class _CategoryEstablishmentsPageState
               }
             }
 
-            establishments.add({
-              'id': restaurantId,
-              'name': restaurantName,
-              'data': restaurantData,
-              'products': products,
-            });
+            // 🐴 OPERAÇÃO CAVALO DE TROIA: Só adiciona se tiver produtos disponíveis
+            if (products.isNotEmpty) {
+              establishments.add({
+                'id': restaurantId,
+                'name': restaurantName,
+                'data': restaurantData,
+                'products': products,
+              });
+            }
 
           } catch (e) {
-            establishments.add({
-              'id': restaurantId,
-              'name': restaurantName,
-              'data': restaurant,
-              'products': [],
-            });
+            // 🐴 OPERAÇÃO CAVALO DE TROIA: Se erro ao buscar produtos, não adiciona
+            // (restaurante sem produtos não deve aparecer)
+            debugPrint('⚠️ Erro ao carregar produtos de $restaurantName: $e');
           }
         }
 

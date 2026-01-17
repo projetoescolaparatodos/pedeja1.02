@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 import '../models/cart_item.dart';
+import '../models/restaurant_model.dart';
+import '../models/dynamic_delivery_fee_model.dart';
 
 class CartState extends ChangeNotifier {
   final List<CartItem> _items = [];
@@ -165,5 +167,160 @@ class CartState extends ChangeNotifier {
   void setError(String? error) {
     _error = error;
     notifyListeners();
+  }
+
+  // 💰 Calcula subtotal do carrinho (sem entrega)
+  double calculateSubtotal() {
+    return _items.fold<double>(
+      0.0,
+      (sum, item) => sum + item.totalPrice,
+    );
+  }
+
+  // 🚚 Calcula taxa de entrega de um restaurante específico (dinâmica ou fixa)
+  /// 
+  /// Prioridade:
+  /// 1. Se taxa dinâmica está ativada → usa faixa correspondente
+  /// 2. Se não → usa sistema antigo (customerDeliveryFee)
+  /// 3. Se não → usa taxa padrão (deliveryFee)
+  double calculateRestaurantDeliveryFee(
+    RestaurantModel restaurant,
+    double restaurantSubtotal,
+  ) {
+    // ✅ 1. TAXA DINÂMICA (NOVA!)
+    if (restaurant.dynamicDeliveryFee?.enabled == true) {
+      final tiers = restaurant.dynamicDeliveryFee!.tiers;
+
+      // Encontra a faixa que corresponde ao valor do pedido
+      final matchedTier = tiers.firstWhere(
+        (tier) => tier.matches(restaurantSubtotal),
+        orElse: () => DeliveryFeeTier(
+          minValue: 0,
+          customerPays: restaurant.deliveryFee,
+          // subsidy é calculado, não passado!
+        ),
+      );
+
+      debugPrint(
+          '🎯 [TAXA DINÂMICA] ${restaurant.name} - Subtotal: R\$ ${restaurantSubtotal.toStringAsFixed(2)}');
+      debugPrint(
+          '   Faixa: R\$ ${matchedTier.minValue} - ${matchedTier.maxValue ?? "∞"}');
+      debugPrint(
+          '   Cliente paga: R\$ ${matchedTier.customerPays.toStringAsFixed(2)}');
+
+      return matchedTier.customerPays;
+    }
+
+    // ❌ 2. SISTEMA ANTIGO (compatibilidade)
+    if (restaurant.customerDeliveryFee != null &&
+        restaurant.customerDeliveryFee! < restaurant.deliveryFee) {
+      debugPrint(
+          '📦 [TAXA PARCIAL] ${restaurant.name} - Cliente paga: R\$ ${restaurant.customerDeliveryFee}');
+      return restaurant.customerDeliveryFee!;
+    }
+
+    // ❌ 3. TAXA PADRÃO
+    debugPrint(
+        '📦 [TAXA PADRÃO] ${restaurant.name} - Cliente paga: R\$ ${restaurant.deliveryFee}');
+    return restaurant.deliveryFee;
+  }
+
+  // 🚚 Calcula SOMA de todas as taxas de entrega (múltiplos restaurantes)
+  /// 
+  /// CRÍTICO: Quando há produtos de diferentes restaurantes,
+  /// cada um tem sua taxa de entrega, então SOMA todas as taxas!
+  double calculateTotalDeliveryFee(
+      Map<String, RestaurantModel> restaurantsMap) {
+    double totalDeliveryFee = 0.0;
+
+    for (var entry in itemsByRestaurant.entries) {
+      final restaurantId = entry.key;
+      final restaurant = restaurantsMap[restaurantId];
+
+      if (restaurant != null) {
+        final restaurantSubtotal = getRestaurantSubtotal(restaurantId);
+        final fee =
+            calculateRestaurantDeliveryFee(restaurant, restaurantSubtotal);
+        totalDeliveryFee += fee;
+
+        debugPrint(
+            '🚚 [SOMA TAXA] ${restaurant.name}: R\$ ${fee.toStringAsFixed(2)}');
+      }
+    }
+
+    debugPrint(
+        '🚚 [TOTAL ENTREGA] R\$ ${totalDeliveryFee.toStringAsFixed(2)} (${itemsByRestaurant.length} restaurantes)');
+    return totalDeliveryFee;
+  }
+
+  // 💰 Calcula quanto o restaurante subsidia
+  /// 
+  /// ✅ CRÍTICO: Subsídio é SEMPRE CALCULADO, nunca lido do banco!
+  /// Exemplo: taxa real = R$ 5, cliente paga R$ 3
+  /// subsídio = 5 - 3 = R$ 2 (restaurante paga a diferença)
+  double calculateRestaurantSubsidy(
+    RestaurantModel restaurant,
+    double restaurantSubtotal,
+  ) {
+    final customerPays =
+        calculateRestaurantDeliveryFee(restaurant, restaurantSubtotal);
+    final realDeliveryFee = restaurant.deliveryFee;
+
+    // ✅ SEMPRE calcula: taxa real - taxa que cliente paga
+    final subsidy = realDeliveryFee - customerPays;
+    return subsidy > 0 ? subsidy : 0;
+  }
+
+  // 💰 Calcula total que cliente paga (subtotal + entregas)
+  double calculateTotal(Map<String, RestaurantModel> restaurantsMap) {
+    final subtotal = calculateSubtotal();
+    final deliveryFee = calculateTotalDeliveryFee(restaurantsMap);
+
+    return subtotal + deliveryFee;
+  }
+
+  // 📊 Verifica quanto falta para frete grátis em um restaurante
+  /// Retorna null se não houver próxima faixa ou se já estiver grátis
+  Map<String, dynamic>? getFreeShippingProgress(
+    RestaurantModel restaurant,
+    double restaurantSubtotal,
+  ) {
+    // Só funciona com taxa dinâmica
+    if (restaurant.dynamicDeliveryFee?.enabled != true) {
+      return null;
+    }
+
+    final tiers = restaurant.dynamicDeliveryFee!.tiers;
+    final currentFee =
+        calculateRestaurantDeliveryFee(restaurant, restaurantSubtotal);
+
+    // Se já está grátis, não mostra progresso
+    if (currentFee == 0) {
+      return null;
+    }
+
+    // Procura a próxima faixa com taxa menor
+    DeliveryFeeTier? nextTier;
+    for (var tier in tiers) {
+      if (tier.minValue > restaurantSubtotal &&
+          tier.customerPays < currentFee) {
+        nextTier = tier;
+        break;
+      }
+    }
+
+    // Se não há próxima faixa com taxa menor, não mostra nada
+    if (nextTier == null) {
+      return null;
+    }
+
+    final needed = nextTier.minValue - restaurantSubtotal;
+    final savings = currentFee - nextTier.customerPays;
+
+    return {
+      'needed': needed,
+      'savings': savings,
+      'nextTierMinValue': nextTier.minValue,
+    };
   }
 }

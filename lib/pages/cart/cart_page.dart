@@ -221,6 +221,10 @@ class CartPage extends StatelessWidget {
                       ],
                     ),
                   ],
+
+                  // 🚚 INDICADOR DISCRETO: "Falta R$ X para entrega grátis"
+                  if (restaurant != null)
+                    _buildFreeShippingIndicator(cart, restaurant, subtotal),
                 ],
               ),
             ),
@@ -824,12 +828,24 @@ class CartPage extends StatelessWidget {
     for (var restaurantId in itemsByRestaurant.keys) {
       try {
         final restaurant = await _fetchRestaurant(restaurantId);
-        totalFee += restaurant?.displayDeliveryFee ?? 0.0;
+        if (restaurant != null) {
+          final restaurantSubtotal = cart.getRestaurantSubtotal(restaurantId);
+          final fee = cart.calculateRestaurantDeliveryFee(
+            restaurant,
+            restaurantSubtotal,
+          );
+          totalFee += fee;
+          
+          debugPrint(
+              '🚚 [TAXA] ${restaurant.name}: R\$ ${fee.toStringAsFixed(2)} (subtotal: R\$ ${restaurantSubtotal.toStringAsFixed(2)})');
+        }
       } catch (e) {
         debugPrint('Erro ao buscar taxa de entrega do restaurante: $e');
       }
     }
 
+    debugPrint(
+        '🚚 [TOTAL TAXAS] R\$ ${totalFee.toStringAsFixed(2)} (${itemsByRestaurant.length} restaurantes)');
     return totalFee;
   }
 
@@ -1177,6 +1193,59 @@ class CartPage extends StatelessWidget {
         ),
       );
     }
+  }
+
+  /// 🚚 Indicador discreto: "Falta R$ X para entrega grátis"
+  /// Mostra apenas se houver taxa dinâmica e houver progresso a mostrar
+  Widget _buildFreeShippingIndicator(
+    CartState cart,
+    RestaurantModel restaurant,
+    double restaurantSubtotal,
+  ) {
+    final progress = cart.getFreeShippingProgress(restaurant, restaurantSubtotal);
+
+    // Não mostra se não houver progresso ou se já estiver grátis
+    if (progress == null) {
+      return const SizedBox.shrink();
+    }
+
+    final needed = progress['needed'] as double;
+    final savings = progress['savings'] as double;
+
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      decoration: BoxDecoration(
+        color: const Color(0xFF0D3B3B),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(
+          color: const Color(0xFF66BB6A),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(
+            Icons.local_shipping,
+            color: Color(0xFF66BB6A),
+            size: 14,
+          ),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              'Falta R\$ ${needed.toStringAsFixed(2).replaceAll('.', ',')} p/ grátis',
+              style: const TextStyle(
+                color: Color(0xFF66BB6A),
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

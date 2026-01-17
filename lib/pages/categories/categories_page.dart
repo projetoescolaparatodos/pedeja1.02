@@ -43,6 +43,9 @@ class _CategoriesPageState extends State<CategoriesPage> {
 
         for (var r in restaurants) {
           if (r is Map) {
+            // 🐴 OPERAÇÃO CAVALO DE TROIA: Só conta restaurantes ativos
+            if (r['isActive'] != true) continue;
+            
             String type = (r['type']?.toString() ?? 'outros').toLowerCase();
             if (type.isNotEmpty) {
               type = type[0].toUpperCase() + type.substring(1);

@@ -9,6 +9,7 @@ import '../../state/auth_state.dart';
 import '../../state/cart_state.dart';
 import '../payment/pix_payment_page.dart';
 import '../payment/card_checkout_page.dart'; // ✅ Checkout Pro
+import '../profile/complete_profile_page.dart';
 
 /// Página de seleção do método de pagamento
 class PaymentMethodPage extends StatefulWidget {
@@ -692,6 +693,44 @@ class _PaymentMethodPageState extends State<PaymentMethodPage> {
                     style: const TextStyle(color: Colors.white70),
                   ),
           ),
+          // ✨ Botão para mudar endereço (só aparece quando delivery está selecionado)
+          if (_deliveryMethod == 'delivery')
+            Padding(
+              padding: const EdgeInsets.only(left: 40, top: 4, bottom: 4),
+              child: GestureDetector(
+                onTap: () async {
+                  await Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const CompleteProfilePage(),
+                    ),
+                  );
+                  // Recarregar taxa de entrega após voltar da página de endereço
+                  if (mounted) {
+                    _loadDeliveryFee();
+                  }
+                },
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.edit_location,
+                      size: 16,
+                      color: const Color(0xFFE39110),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Mudar endereço',
+                      style: TextStyle(
+                        color: const Color(0xFFE39110),
+                        fontSize: 13,
+                        decoration: TextDecoration.underline,
+                        decorationColor: const Color(0xFFE39110),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           const SizedBox(height: 8),
           _buildDeliveryMethodTile(
             title: 'Retirada no local',

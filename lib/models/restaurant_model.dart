@@ -1,4 +1,6 @@
-﻿class RestaurantModel {
+﻿import 'dynamic_delivery_fee_model.dart';
+
+class RestaurantModel {
   RestaurantModel({
     required this.id,
     required this.name,
@@ -18,6 +20,7 @@
     this.minimumOrder = 0.0,
     this.deliveryFee = 0.0,
     this.customerDeliveryFee,
+    this.dynamicDeliveryFee,
   });
 
   final String id;
@@ -38,6 +41,7 @@
   final double minimumOrder;
   final double deliveryFee;
   final double? customerDeliveryFee;
+  final DynamicDeliveryFeeConfig? dynamicDeliveryFee;
 
   // Getter para obter a taxa que será exibida/cobrada ao cliente
   double get displayDeliveryFee {
@@ -86,6 +90,10 @@
       customerDeliveryFee: json['customerDeliveryFee'] != null 
           ? (json['customerDeliveryFee'] as num).toDouble() 
           : null,
+      dynamicDeliveryFee: json['dynamicDeliveryFee'] != null
+          ? DynamicDeliveryFeeConfig.fromMap(
+              json['dynamicDeliveryFee'] as Map<String, dynamic>)
+          : null,
     );
   }
 
@@ -109,6 +117,7 @@
       'minimumOrder': minimumOrder,
       'deliveryFee': deliveryFee,
       'customerDeliveryFee': customerDeliveryFee,
+      'dynamicDeliveryFee': dynamicDeliveryFee?.toMap(),
     };
   }
 }

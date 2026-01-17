@@ -308,13 +308,42 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   List<RestaurantModel> _filterRestaurants(List<RestaurantModel> restaurants) {
-    if (_searchQuery.isEmpty) return restaurants;
-    return restaurants.where((r) {
-      final query = _searchQuery; // Já vem normalizado do TextField
-      return _normalizeText(r.name).contains(query) ||
-          _normalizeText(r.address).contains(query) ||
-          _normalizeText(r.email ?? '').contains(query);
+    return restaurants.where((restaurant) {
+      // 🐴 OPERAÇÃO CAVALO DE TROIA: Esconder restaurantes inativos
+      if (!restaurant.isActive) return false;
+      
+      // 🐴 OPERAÇÃO CAVALO DE TROIA: Esconder restaurantes sem produtos disponíveis
+      final hasProducts = _hasRestaurantProducts(restaurant.id);
+      if (!hasProducts) return false;
+      
+      // Filtro de busca (se houver)
+      if (_searchQuery.isNotEmpty) {
+        final query = _searchQuery; // Já vem normalizado do TextField
+        return _normalizeText(restaurant.name).contains(query) ||
+            _normalizeText(restaurant.address).contains(query) ||
+            _normalizeText(restaurant.email ?? '').contains(query);
+      }
+      
+      return true;
     }).toList();
+  }
+
+  /// 🐴 Verifica se o restaurante tem pelo menos 1 produto disponível
+  bool _hasRestaurantProducts(String restaurantId) {
+    final catalog = Provider.of<CatalogProvider>(context, listen: false);
+    
+    // Concatena todas as listas de produtos
+    final allProducts = [
+      ...catalog.featuredProducts,
+      ...catalog.drinksProducts,
+      ...catalog.pharmacyProducts,
+      ...catalog.personalCareProducts,
+      ...catalog.marketProducts,
+      ...catalog.perfumeryProducts,
+    ];
+    
+    // Verifica se há pelo menos 1 produto deste restaurante
+    return allProducts.any((product) => product.restaurantId == restaurantId);
   }
 
   /// ✅ Filtrar produtos em destaque pela busca
@@ -2437,12 +2466,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               
               // Menu items
               Expanded(
-                child: ListView(
-                  padding: const EdgeInsets.all(16),
-                  children: [
-                    _buildDrawerItem(
-                      icon: Icons.grid_view,
-                      title: 'Catálogo',
+                child: Consumer<CatalogProvider>(
+                  builder: (context, catalog, _) {
+                    return ListView(
+                      padding: const EdgeInsets.all(16),
+                      children: [
+                        _buildDrawerItem(
+                          icon: Icons.grid_view,
+                          title: 'Catálogo',
                       onTap: () => Navigator.pop(context),
                     ),
                     _buildDrawerItem(
@@ -2486,54 +2517,66 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         _scrollToTop();
                       },
                     ),
-                    _buildDrawerItem(
-                      icon: Icons.star,
-                      title: 'Produtos em Destaque',
-                      onTap: () {
-                        Navigator.pop(context);
-                        _scrollToSection(0);
-                      },
-                    ),
-                    _buildDrawerItem(
-                      icon: Icons.local_drink,
-                      title: 'Bebidas',
-                      onTap: () {
-                        Navigator.pop(context);
-                        _scrollToSection(1);
-                      },
-                    ),
-                    _buildDrawerItem(
-                      icon: Icons.local_pharmacy,
-                      title: 'Farmácia',
-                      onTap: () {
-                        Navigator.pop(context);
-                        _scrollToSection(2);
-                      },
-                    ),
-                    _buildDrawerItem(
-                      icon: Icons.face,
-                      title: 'Cuidados Pessoais',
-                      onTap: () {
-                        Navigator.pop(context);
-                        _scrollToSection(3);
-                      },
-                    ),
-                    _buildDrawerItem(
-                      icon: Icons.shopping_cart,
-                      title: 'Mercado',
-                      onTap: () {
-                        Navigator.pop(context);
-                        _scrollToSection(4);
-                      },
-                    ),
-                    _buildDrawerItem(
-                      icon: Icons.spa,
-                      title: 'Perfumaria',
-                      onTap: () {
-                        Navigator.pop(context);
-                        _scrollToSection(5);
-                      },
-                    ),
+                    // 🐴 Botão só aparece se houver produtos (Operação Cavalo de Troia)
+                    if (catalog.featuredProducts.isNotEmpty)
+                      _buildDrawerItem(
+                        icon: Icons.star,
+                        title: 'Produtos em Destaque',
+                        onTap: () {
+                          Navigator.pop(context);
+                          _scrollToSection(0);
+                        },
+                      ),
+                    // 🐴 Botão só aparece se houver produtos (Operação Cavalo de Troia)
+                    if (catalog.drinksProducts.isNotEmpty)
+                      _buildDrawerItem(
+                        icon: Icons.local_drink,
+                        title: 'Bebidas',
+                        onTap: () {
+                          Navigator.pop(context);
+                          _scrollToSection(1);
+                        },
+                      ),
+                    // 🐴 Botão só aparece se houver produtos (Operação Cavalo de Troia)
+                    if (catalog.pharmacyProducts.isNotEmpty)
+                      _buildDrawerItem(
+                        icon: Icons.local_pharmacy,
+                        title: 'Farmácia',
+                        onTap: () {
+                          Navigator.pop(context);
+                          _scrollToSection(2);
+                        },
+                      ),
+                    // 🐴 Botão só aparece se houver produtos (Operação Cavalo de Troia)
+                    if (catalog.personalCareProducts.isNotEmpty)
+                      _buildDrawerItem(
+                        icon: Icons.face,
+                        title: 'Cuidados Pessoais',
+                        onTap: () {
+                          Navigator.pop(context);
+                          _scrollToSection(3);
+                        },
+                      ),
+                    // 🐴 Botão só aparece se houver produtos (Operação Cavalo de Troia)
+                    if (catalog.marketProducts.isNotEmpty)
+                      _buildDrawerItem(
+                        icon: Icons.shopping_cart,
+                        title: 'Mercado',
+                        onTap: () {
+                          Navigator.pop(context);
+                          _scrollToSection(4);
+                        },
+                      ),
+                    // 🐴 Botão só aparece se houver produtos (Operação Cavalo de Troia)
+                    if (catalog.perfumeryProducts.isNotEmpty)
+                      _buildDrawerItem(
+                        icon: Icons.spa,
+                        title: 'Perfumaria',
+                        onTap: () {
+                          Navigator.pop(context);
+                          _scrollToSection(5);
+                        },
+                      ),
                     const Divider(color: Color(0xFFE39110), height: 32),
                     _buildDrawerItem(
                       icon: Icons.restaurant_menu,
@@ -2703,8 +2746,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                       },
                     ),
                   ],
-                ),
-              ),
+                );
+              },
+            ),
+          ),
             ],
           ),
         ),

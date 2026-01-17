@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../../models/order_model.dart' as models;
+import '../../models/restaurant_model.dart';
 import '../../services/backend_order_service.dart';
 import '../../state/auth_state.dart';
 import '../../state/cart_state.dart';
@@ -35,6 +36,7 @@ class _PaymentMethodPageState extends State<PaymentMethodPage> {
   String _deliveryMethod = 'delivery'; // 'delivery' | 'pickup'
   double? _deliveryFeeAmount; // Taxa que cliente paga
   double? _totalDeliveryFee;  // Taxa total (entregador recebe)
+  RestaurantModel? _restaurant; // ✅ Modelo completo com dynamicDeliveryFee
   bool _isLoadingDeliveryFee = false;
   bool _needsChange = false;
   final TextEditingController _changeController = TextEditingController();
@@ -58,15 +60,17 @@ class _PaymentMethodPageState extends State<PaymentMethodPage> {
 
       if (response.statusCode == 200) {
         final restaurantData = json.decode(response.body);
-        // Armazenar taxa total e taxa do cliente
-        _totalDeliveryFee = (restaurantData['deliveryFee'] ?? 0.0).toDouble();
-        final customerFee = restaurantData['customerDeliveryFee'];
-        _deliveryFeeAmount = (customerFee ?? _totalDeliveryFee).toDouble();
-        debugPrint('💰 Taxa total: R\$ ${_totalDeliveryFee!.toStringAsFixed(2)}');
-        debugPrint('💰 Cliente paga: R\$ ${_deliveryFeeAmount!.toStringAsFixed(2)}');
+        
+        // ✅ Parsear RestaurantModel completo (com dynamicDeliveryFee)
+        _restaurant = RestaurantModel.fromJson(restaurantData);
+        _totalDeliveryFee = _restaurant!.deliveryFee;
+        
+        debugPrint('🏪 Restaurante carregado: ${_restaurant!.name}');
+        debugPrint('💰 Taxa real (entregador): R\$ ${_totalDeliveryFee!.toStringAsFixed(2)}');
+        debugPrint('🎯 Taxa dinâmica ativada: ${_restaurant!.dynamicDeliveryFee?.enabled}');
       }
     } catch (e) {
-      debugPrint('⚠️ Erro ao buscar taxa de entrega: $e');
+      debugPrint('⚠️ Erro ao buscar restaurante: $e');
     } finally {
       if (mounted) {
         setState(() {
@@ -88,7 +92,14 @@ class _PaymentMethodPageState extends State<PaymentMethodPage> {
 
   double _effectiveDeliveryFee() {
     if (_deliveryMethod == 'pickup') return 0.0;
-    return _deliveryFeeAmount ?? 0.0;
+    if (_restaurant == null) return 0.0;
+    
+    // ✅ Usar CartState para calcular taxa dinâmica baseada no subtotal
+    final cartState = context.read<CartState>();
+    final restaurantItems = _restaurantItems(cartState);
+    final subtotal = _calculateSubtotal(restaurantItems);
+    
+    return cartState.calculateRestaurantDeliveryFee(_restaurant!, subtotal);
   }
 
   double _calculateTotal(double subtotal) {
@@ -96,11 +107,19 @@ class _PaymentMethodPageState extends State<PaymentMethodPage> {
   }
 
   Map<String, dynamic> _buildAddressData(dynamic address, String formattedAddress) {
-    // Sempre usa endereço do usuário, só muda o campo method
+    // ✅ API espera campos individuais (street, number, etc) + method
     if (address is Map) {
-      final addressMap = Map<String, dynamic>.from(address);
-      addressMap['method'] = _deliveryMethod; // 'delivery' ou 'pickup'
-      return addressMap;
+      return {
+        'method': _deliveryMethod, // 'delivery' ou 'pickup'
+        'street': address['street'] ?? '',
+        'number': address['number'] ?? '',
+        'complement': address['complement'] ?? '',
+        'neighborhood': address['neighborhood'] ?? '',
+        'city': address['city'] ?? '',
+        'state': address['state'] ?? '',
+        'zipCode': address['zipCode'] ?? '',
+        'fullAddress': formattedAddress, // Enviar também formatado
+      };
     }
 
     // Fallback para string
@@ -110,29 +129,121 @@ class _PaymentMethodPageState extends State<PaymentMethodPage> {
     };
   }
 
+  /// ✅ Parse de endereço no formato: "R. Fulana, 123 - Bairro, Cidade/Estado CEP: 12345-000"
+  Map<String, dynamic> _parseAddressString(String fullAddress) {
+    try {
+      // Padrão: "Rua, Número - Bairro, Cidade - Estado CEP: 00000-000"
+      // ou: "Rua, Número - Bairro, Cidade/Estado"
+      
+      String street = '';
+      String number = '';
+      String neighborhood = '';
+      String city = '';
+      String state = '';
+      String zipCode = '';
+      
+      // Remover CEP se houver
+      final cepMatch = RegExp(r'CEP:\s*(\d{5}-?\d{3})').firstMatch(fullAddress);
+      if (cepMatch != null) {
+        zipCode = cepMatch.group(1) ?? '';
+        fullAddress = fullAddress.replaceFirst(cepMatch.group(0)!, '').trim();
+      }
+      
+      // Padrão 1: "Rua, 123 - Bairro, Cidade/Estado"
+      var match = RegExp(r'^(.+?),\s*(\d+)\s*-\s*([^,]+),\s*([^/]+)/(.+)$').firstMatch(fullAddress);
+      
+      if (match != null) {
+        street = match.group(1)?.trim() ?? '';
+        number = match.group(2)?.trim() ?? '';
+        neighborhood = match.group(3)?.trim() ?? '';
+        city = match.group(4)?.trim() ?? '';
+        state = match.group(5)?.trim() ?? '';
+      } else {
+        // Padrão 2: "Rua, 123 - Bairro, Cidade - Estado"
+        match = RegExp(r'^(.+?),\s*(\d+)\s*-\s*([^,]+),\s*(.+?)\s*-\s*(.+)$').firstMatch(fullAddress);
+        
+        if (match != null) {
+          street = match.group(1)?.trim() ?? '';
+          number = match.group(2)?.trim() ?? '';
+          neighborhood = match.group(3)?.trim() ?? '';
+          city = match.group(4)?.trim() ?? '';
+          state = match.group(5)?.trim() ?? '';
+        } else {
+          // Fallback: usar tudo como street
+          debugPrint('⚠️ [Parse] Não conseguiu parsear, usando formato original');
+          street = fullAddress;
+        }
+      }
+      
+      return {
+        'street': street,
+        'number': number,
+        'complement': '',
+        'neighborhood': neighborhood,
+        'city': city,
+        'state': state,
+        'zipCode': zipCode,
+      };
+    } catch (e) {
+      debugPrint('❌ [Parse] Erro ao parsear endereço: $e');
+      return {
+        'street': fullAddress,
+        'number': '',
+        'complement': '',
+        'neighborhood': '',
+        'city': '',
+        'state': '',
+        'zipCode': '',
+      };
+    }
+  }
+
   void _validateDeliveryAddressOrThrow(dynamic address) {
     if (_deliveryMethod == 'pickup') return; // Pickup não precisa validar endereço
 
-    if (address is Map) {
-      final requiredFields = [
-        'street',
-        'number',
-        'neighborhood',
-        'city',
-        'state',
-        'zipCode',
-      ];
+    debugPrint('🔍 [Validação] Validando endereço: $address (tipo: ${address.runtimeType})');
 
-      final missing = requiredFields
-          .where((field) => (address[field]?.toString().trim().isEmpty ?? true))
-          .toList();
+    if (address is Map) {
+      final requiredFields = {
+        'street': 'Rua/Avenida',
+        'number': 'Número',
+        'neighborhood': 'Bairro',
+        'city': 'Cidade',
+        'state': 'Estado',
+      };
+      
+      // CEP é opcional (nem sempre disponível no banco)
+      final optionalFields = {
+        'zipCode': 'CEP',
+      };
+
+      final missing = <String>[];
+      
+      requiredFields.forEach((field, label) {
+        final value = address[field]?.toString().trim() ?? '';
+        debugPrint('   Campo $field ($label): "$value" ${value.isEmpty ? "❌ VAZIO" : "✅"}');
+        if (value.isEmpty) {
+          missing.add(label);
+        }
+      });
+      
+      // Validar opcionais (apenas log, não bloqueia)
+      optionalFields.forEach((field, label) {
+        final value = address[field]?.toString().trim() ?? '';
+        debugPrint('   Campo $field ($label - opcional): "$value" ${value.isEmpty ? "⚠️ VAZIO" : "✅"}');
+      });
 
       if (missing.isNotEmpty) {
-        throw Exception('Complete o endereço: ${missing.join(', ')}');
+        final errorMsg = 'Complete o endereço: ${missing.join(', ')}';
+        debugPrint('❌ [Validação] ERRO: $errorMsg');
+        throw Exception(errorMsg);
       }
+      
+      debugPrint('✅ [Validação] Endereço completo!');
       return;
     }
 
+    debugPrint('❌ [Validação] Endereço não é um Map!');
     throw Exception('Endereço inválido para entrega. Atualize seu cadastro.');
   }
 
@@ -196,35 +307,58 @@ class _PaymentMethodPageState extends State<PaymentMethodPage> {
       var address = userData['address'];
       String deliveryAddressString;
 
+      debugPrint('🏠 [Address Debug] userData[\'address\']: ${userData['address']}');
+
       if (address == null) {
-        final addresses = userData['addresses'];
-        if (addresses is List && addresses.isNotEmpty) {
-          deliveryAddressString = addresses[0].toString();
-          address = addresses[0];
-        } else if (_deliveryMethod == 'delivery') {
+        if (_deliveryMethod == 'delivery') {
           throw Exception('Endereço não cadastrado');
-        } else {
-          deliveryAddressString = 'Retirada no local';
         }
+        deliveryAddressString = 'Retirada no local';
+        address = {}; // Mock vazio para pickup
       } else if (address is String) {
         deliveryAddressString = address;
+        // ✅ Parse do formato: "R. Fulana, 123 - Bairro, Cidade/Estado"
+        address = _parseAddressString(address);
+        debugPrint('🏠 [Parse] String parseada: $address');
       } else if (address is Map) {
         final addressMap = Map<String, dynamic>.from(address);
-        final street = addressMap['street']?.toString() ?? '';
-        final number = addressMap['number']?.toString() ?? '';
-        final complement = addressMap['complement']?.toString() ?? '';
-        final neighborhood = addressMap['neighborhood']?.toString() ?? '';
-        final city = addressMap['city']?.toString() ?? '';
-        final state = addressMap['state']?.toString() ?? '';
-        final zipCode = addressMap['zipCode']?.toString() ?? '';
         
-        deliveryAddressString = '$street, $number'
-            '${complement.isNotEmpty ? ' - $complement' : ''}'
-            ' - $neighborhood, $city - $state'
-            ' CEP: $zipCode';
+        // ✅ COMPATIBILIDADE: Se campos vazios mas street tem tudo, parsear
+        final street = addressMap['street']?.toString() ?? '';
+        final number = addressMap['number']?.toString().trim() ?? '';
+        final neighborhood = addressMap['neighborhood']?.toString().trim() ?? '';
+        final city = addressMap['city']?.toString().trim() ?? '';
+        final state = addressMap['state']?.toString().trim() ?? '';
+        final zipCode = addressMap['zipCode']?.toString().trim() ?? '';
+        
+        if (number.isEmpty && neighborhood.isEmpty && city.isEmpty && street.contains(',')) {
+          // Backend salvou tudo no campo street, parsear!
+          debugPrint('🏠 [Parse] Endereço no formato antigo (tudo em street), parseando...');
+          address = _parseAddressString(street);
+          address['zipCode'] = zipCode; // Manter zipCode se houver
+          debugPrint('🏠 [Parse] Endereço parseado: $address');
+        }
+        
+        // Formatar string para exibição
+        final parsedMap = address is Map ? Map<String, dynamic>.from(address) : addressMap;
+        final finalStreet = parsedMap['street']?.toString() ?? '';
+        final finalNumber = parsedMap['number']?.toString() ?? '';
+        final finalComplement = parsedMap['complement']?.toString() ?? '';
+        final finalNeighborhood = parsedMap['neighborhood']?.toString() ?? '';
+        final finalCity = parsedMap['city']?.toString() ?? '';
+        final finalState = parsedMap['state']?.toString() ?? '';
+        final finalZipCode = parsedMap['zipCode']?.toString() ?? '';
+        
+        deliveryAddressString = '$finalStreet, $finalNumber'
+            '${finalComplement.isNotEmpty ? ' - $finalComplement' : ''}'
+            ' - $finalNeighborhood, $finalCity - $finalState'
+            ' CEP: $finalZipCode';
       } else {
         throw Exception('Formato de endereço inválido');
       }
+
+      debugPrint('🏠 [Address Final] address: $address');
+      debugPrint('🏠 [Address Final] deliveryAddressString: $deliveryAddressString');
 
       // 2.1 Validar endereço somente para delivery
       _validateDeliveryAddressOrThrow(address);
@@ -266,13 +400,19 @@ class _PaymentMethodPageState extends State<PaymentMethodPage> {
         }
       }
 
-      // 5. Calcular totais
+      // 5. Calcular totais com taxa dinâmica
       final restaurantSubtotal = _calculateSubtotal(restaurantItems);
-      final deliveryFeeAmount = await _ensureDeliveryFeeLoaded();
+      await _ensureDeliveryFeeLoaded(); // Garantir que _restaurant está carregado
       
-      // Calcular valores de entrega
-      final double totalDeliveryFee = _deliveryMethod == 'pickup' ? 0.0 : (_totalDeliveryFee ?? deliveryFeeAmount);
-      final double customerPaid = _deliveryMethod == 'pickup' ? 0.0 : deliveryFeeAmount;
+      if (_restaurant == null) {
+        throw Exception('Dados do restaurante não carregados');
+      }
+      
+      // ✅ Usar CartState para calcular taxa dinâmica baseada no subtotal real
+      final double totalDeliveryFee = _deliveryMethod == 'pickup' ? 0.0 : _restaurant!.deliveryFee;
+      final double customerPaid = _deliveryMethod == 'pickup' 
+          ? 0.0 
+          : cartState.calculateRestaurantDeliveryFee(_restaurant!, restaurantSubtotal);
       final double restaurantSubsidy = totalDeliveryFee - customerPaid;
       
       // Determinar modo

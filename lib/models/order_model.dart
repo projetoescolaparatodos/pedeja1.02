@@ -10,6 +10,7 @@ class OrderItem {
   final String imageUrl;
   final List<OrderItemAddon> addons;
   final String? brandName;
+  final List<Map<String, dynamic>>? advancedToppingsSelections; // 🍕 ADICIONAIS AVANÇADOS
 
   OrderItem({
     required this.productId,
@@ -19,6 +20,7 @@ class OrderItem {
     required this.imageUrl,
     this.addons = const [],
     this.brandName,
+    this.advancedToppingsSelections,
   });
 
   double get totalPrice {
@@ -39,6 +41,7 @@ class OrderItem {
       'addons': addons.map((a) => a.toMap()).toList(),
       'totalPrice': totalPrice,
       if (brandName != null) 'brandName': brandName,
+      if (advancedToppingsSelections != null) 'advancedToppingsSelections': advancedToppingsSelections,
     };
   }
 
@@ -54,6 +57,9 @@ class OrderItem {
               .toList() ??
           [],
       brandName: map['brandName'],
+      advancedToppingsSelections: (map['advancedToppingsSelections'] as List<dynamic>?)
+              ?.map((s) => s as Map<String, dynamic>)
+              .toList(),
     );
   }
 }

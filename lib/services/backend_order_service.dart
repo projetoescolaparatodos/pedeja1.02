@@ -30,6 +30,7 @@ class BackendOrderService {
       debugPrint('   Total: R\$ ${total.toStringAsFixed(2)}');
       debugPrint('   Método: ${payment['method']}');
       debugPrint('   Items com brandName: ${items.where((i) => i.brandName != null).map((i) => '${i.name} (${i.brandName})').join(', ')}');
+      debugPrint('   Items com advancedToppings: ${items.where((i) => i.advancedToppingsSelections != null && i.advancedToppingsSelections!.isNotEmpty).map((i) => '${i.name} (${i.advancedToppingsSelections!.length} selections)').join(', ')}');
 
       final response = await http.post(
         Uri.parse('$apiUrl/api/orders'),
@@ -40,17 +41,50 @@ class BackendOrderService {
         body: json.encode({
           'restaurantId': restaurantId,
           'restaurantName': restaurantName,
-          'items': items.map((item) => {
-            'productId': item.productId,
-            'title': item.name,              // API espera 'title' ao invés de 'name'
-            'unitPrice': item.price,         // API espera 'unitPrice' ao invés de 'price'
-            'quantity': item.quantity,
-            'imageUrl': item.imageUrl,
-            if (item.brandName != null) 'brandName': item.brandName,
-            'addons': item.addons.map((addon) => {
-              'name': addon.name,
-              'price': addon.price,
-            }).toList(),
+          'items': items.map((item) {
+            // 🍕 Converter advancedToppingsSelections flat para estrutura agrupada
+            List<Map<String, dynamic>>? groupedToppings;
+            if (item.advancedToppingsSelections != null && item.advancedToppingsSelections!.isNotEmpty) {
+              // Agrupar por sectionId
+              final Map<String, Map<String, dynamic>> sectionsMap = {};
+              
+              for (var selection in item.advancedToppingsSelections!) {
+                final sectionId = selection['sectionId'] as String;
+                final sectionName = selection['sectionName'] as String;
+                
+                if (!sectionsMap.containsKey(sectionId)) {
+                  sectionsMap[sectionId] = {
+                    'sectionId': sectionId,
+                    'sectionName': sectionName,
+                    'selectedItems': <Map<String, dynamic>>[],
+                  };
+                }
+                
+                (sectionsMap[sectionId]!['selectedItems'] as List).add({
+                  'itemId': selection['itemId'],
+                  'itemName': selection['itemName'],
+                  'price': selection['itemPrice'],
+                  'quantity': selection['quantity'],
+                });
+              }
+              
+              groupedToppings = sectionsMap.values.toList();
+            }
+            
+            return {
+              'productId': item.productId,
+              'title': item.name,              // API espera 'title' ao invés de 'name'
+              'unitPrice': item.price,         // API espera 'unitPrice' ao invés de 'price'
+              'quantity': item.quantity,
+              'imageUrl': item.imageUrl,
+              if (item.brandName != null) 'brandName': item.brandName,
+              'addons': item.addons.map((addon) => {
+                'name': addon.name,
+                'price': addon.price,
+              }).toList(),
+              if (groupedToppings != null && groupedToppings.isNotEmpty)
+                'advancedToppingsSelections': groupedToppings,
+            };
           }).toList(),
           'subtotal': subtotal > 0 ? subtotal : total,
           'deliveryFee': deliveryFee,
@@ -127,6 +161,55 @@ class BackendOrderService {
     } catch (e) {
       debugPrint('❌ [BackendOrderService] Erro ao confirmar pagamento: $e');
       rethrow;
+    }
+  }
+
+  /// Buscar histórico de mensagens do chat
+  Future<List<Map<String, dynamic>>> getChatMessages({
+    required String token,
+    required String orderId,
+  }) async {
+    try {
+      debugPrint('💬 [BackendOrderService] Buscando mensagens do pedido $orderId...');
+
+      final response = await http.get(
+        Uri.parse('$apiUrl/api/orders/$orderId/messages'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        
+        // Backend pode retornar { messages: [...] } ou diretamente [...]
+        if (data is Map && data.containsKey('messages')) {
+          final messages = List<Map<String, dynamic>>.from(data['messages']);
+          debugPrint('✅ [BackendOrderService] ${messages.length} mensagens carregadas');
+          return messages;
+        } else if (data is List) {
+          final messages = List<Map<String, dynamic>>.from(data);
+          debugPrint('✅ [BackendOrderService] ${messages.length} mensagens carregadas');
+          return messages;
+        } else {
+          debugPrint('⚠️ [BackendOrderService] Formato de resposta inesperado');
+          return [];
+        }
+      } else if (response.statusCode == 404) {
+        // Pedido sem mensagens ainda
+        debugPrint('💬 [BackendOrderService] Nenhuma mensagem encontrada');
+        return [];
+      } else {
+        final errorBody = json.decode(response.body);
+        final errorMessage = errorBody['message'] ?? errorBody['error'] ?? 'Erro desconhecido';
+        debugPrint('❌ [BackendOrderService] Erro ao buscar mensagens: $errorMessage');
+        throw Exception(errorMessage);
+      }
+    } catch (e) {
+      debugPrint('❌ [BackendOrderService] Exceção ao buscar mensagens: $e');
+      // Não falhar se backend não tiver endpoint ainda, retornar lista vazia
+      return [];
     }
   }
 

@@ -86,10 +86,15 @@ class NotificationService {
   /// Configurar notificações locais
   static Future<void> _configureLocalNotifications() async {
     const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+    
+    // 🍎 iOS: Configuração COMPLETA para notificações
     const iosSettings = DarwinInitializationSettings(
-      requestAlertPermission: false,
-      requestBadgePermission: false,
-      requestSoundPermission: false,
+      requestAlertPermission: true,  // ✅ CRÍTICO: Pedir permissão de alerta
+      requestBadgePermission: true,  // ✅ CRÍTICO: Pedir permissão de badge
+      requestSoundPermission: true,  // ✅ CRÍTICO: Pedir permissão de som
+      defaultPresentAlert: true,     // ✅ Mostrar alerta por padrão
+      defaultPresentBadge: true,     // ✅ Mostrar badge por padrão
+      defaultPresentSound: true,     // ✅ Tocar som por padrão
     );
 
     const initSettings = InitializationSettings(
@@ -329,7 +334,7 @@ class NotificationService {
       // Pegar primeiros 8 caracteres do orderId para exibir
       final shortOrderId = orderId.length > 8 ? orderId.substring(0, 8) : orderId;
 
-      final androidDetails = AndroidNotificationDetails(
+      const androidDetails = AndroidNotificationDetails(
         'chat_messages',
         'Mensagens do Chat',
         channelDescription: 'Notificações de novas mensagens no chat',
@@ -344,9 +349,12 @@ class NotificationService {
       );
 
       const iosDetails = DarwinNotificationDetails(
-        presentAlert: true,
-        presentBadge: true,
-        presentSound: true,
+        presentAlert: true,   // ✅ CRÍTICO: Mostrar alerta no iOS
+        presentBadge: true,   // ✅ CRÍTICO: Atualizar badge
+        presentSound: true,   // ✅ CRÍTICO: Tocar som
+        sound: 'default',     // ✅ Som padrão do iOS
+        badgeNumber: 1,       // ✅ Número no badge
+        interruptionLevel: InterruptionLevel.timeSensitive, // ✅ CRÍTICO: Alta prioridade
       );
 
       final details = NotificationDetails(
@@ -398,9 +406,12 @@ class NotificationService {
       );
 
       const iosDetails = DarwinNotificationDetails(
-        presentAlert: true,
-        presentBadge: true,
-        presentSound: true,
+        presentAlert: true,   // ✅ CRÍTICO: Mostrar alerta no iOS
+        presentBadge: true,   // ✅ CRÍTICO: Atualizar badge
+        presentSound: true,   // ✅ CRÍTICO: Tocar som
+        sound: 'default',     // ✅ Som padrão do iOS
+        badgeNumber: 1,       // ✅ Número no badge
+        interruptionLevel: InterruptionLevel.timeSensitive, // ✅ CRÍTICO: Alta prioridade
       );
 
       const details = NotificationDetails(

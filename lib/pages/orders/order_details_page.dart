@@ -31,6 +31,9 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> with WidgetsBinding
   // ✅ Estado atual do pedido (atualizado em tempo real)
   late Order _currentOrder;
   StreamSubscription<DocumentSnapshot>? _orderSubscription;
+  
+  // 🔥 Listener de mensagens do Firebase (fonte da verdade)
+  StreamSubscription<QuerySnapshot>? _messagesSubscription;
 
   @override
   void initState() {
@@ -41,8 +44,8 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> with WidgetsBinding
     // ✅ Marcar este chat como ativo para suprimir notificações
     ChatService.setActiveChatOrder(widget.order.id);
     
-    _loadCachedMessages();
-    _initializeChat();
+    _listenToFirebaseMessages(); // 🔥 Escutar mensagens em tempo real (PRIMEIRO)
+    _initializeChat(); // Pusher como complemento
     _listenToOrderChanges(); // ✅ Escutar mudanças no pedido
   }
   
@@ -70,13 +73,54 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> with WidgetsBinding
   }
 
   Future<void> _loadCachedMessages() async {
-    // Carregar mensagens do cache (agora é assíncrono)
+    final authState = Provider.of<AuthState>(context, listen: false);
+    
+    // � 1. Carregar cache local PRIMEIRO (tem mensagens recebidas via Pusher)
     final cachedMessages = await ChatService.getCachedMessages(widget.order.id);
-    if (cachedMessages.isNotEmpty) {
+    final Map<String, ChatMessage> allMessages = {};
+    
+    // Adicionar mensagens do cache ao mapa (chave = timestamp + mensagem + user)
+    for (var msg in cachedMessages) {
+      final key = '${msg.timestamp.millisecondsSinceEpoch}_${msg.message}_${msg.user}';
+      allMessages[key] = msg;
+    }
+    debugPrint('💾 [OrderDetailsPage] ${cachedMessages.length} mensagens do cache local');
+    
+    // 🌐 2. Buscar do backend E mesclar
+    if (authState.jwtToken != null && authState.currentUser != null) {
+      try {
+        final userId = authState.currentUser?.uid ?? '';
+        
+        debugPrint('🔄 [OrderDetailsPage] Buscando mensagens do backend...');
+        final backendMessages = await ChatService.loadMessagesFromBackend(
+          orderId: widget.order.id,
+          authToken: authState.jwtToken!,
+          currentUserId: userId,
+        );
+        
+        // Adicionar mensagens do backend ao mapa (sobrescreve duplicatas)
+        for (var msg in backendMessages) {
+          final key = '${msg.timestamp.millisecondsSinceEpoch}_${msg.message}_${msg.user}';
+          allMessages[key] = msg;
+        }
+        debugPrint('🌐 [OrderDetailsPage] ${backendMessages.length} mensagens do backend');
+      } catch (e) {
+        debugPrint('⚠️ [OrderDetailsPage] Erro ao carregar do backend: $e');
+        // Continuar com cache apenas
+      }
+    }
+    
+    // 3. Atualizar UI com mensagens mescladas
+    if (allMessages.isNotEmpty && mounted) {
+      final sortedMessages = allMessages.values.toList()
+        ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
+      
       setState(() {
-        _messages.addAll(cachedMessages);
+        _messages.clear();
+        _messages.addAll(sortedMessages);
       });
-      debugPrint('💬 [OrderDetailsPage] ${cachedMessages.length} mensagens carregadas do cache');
+      debugPrint('✅ [OrderDetailsPage] ${_messages.length} mensagens TOTAL (mescladas)');
+      _scrollToBottom();
     }
   }
 
@@ -125,6 +169,98 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> with WidgetsBinding
       }
     }, onError: (error) {
       debugPrint('❌ [OrderDetailsPage] Erro no listener: $error');
+    });
+  }
+
+  /// 🔥 Escutar mensagens do Firebase em tempo real (FONTE DA VERDADE)
+  void _listenToFirebaseMessages() {
+    final authState = Provider.of<AuthState>(context, listen: false);
+    if (authState.currentUser == null) return;
+
+    debugPrint('🔥 [OrderDetailsPage] Iniciando listener Firebase para mensagens do pedido ${widget.order.id}');
+
+    _messagesSubscription = FirebaseFirestore.instance
+        .collection('orders')
+        .doc(widget.order.id)
+        .collection('messages')
+        .orderBy('timestamp', descending: false)
+        .snapshots()
+        .listen((snapshot) {
+      debugPrint('🔥 [Firebase] Recebeu ${snapshot.docs.length} mensagens (snapshot changes: ${snapshot.docChanges.length})');
+      
+      final userId = authState.currentUser?.uid ?? '';
+      
+      // 🔥 PROCESSAR APENAS MUDANÇAS (added, modified, removed)
+      for (var change in snapshot.docChanges) {
+        try {
+          final data = change.doc.data();
+          if (data == null) continue;
+          
+          final messageSenderId = data['userId'] ?? data['senderId'];
+          final message = ChatMessage.fromMap(data, isMe: messageSenderId == userId);
+          
+          if (change.type == DocumentChangeType.added) {
+            // ✅ Nova mensagem: verificar se já existe antes de adicionar
+            final exists = _messages.any((m) => 
+              m.message == message.message && 
+              m.user == message.user &&
+              m.timestamp.difference(message.timestamp).abs().inSeconds < 2
+            );
+            
+            if (!exists && mounted) {
+              setState(() {
+                _messages.add(message);
+                _messages.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+              });
+              debugPrint('➕ [Firebase] Mensagem ADICIONADA: ${message.message}');
+              _scrollToBottom();
+            }
+          } else if (change.type == DocumentChangeType.modified) {
+            debugPrint('✏️ [Firebase] Mensagem MODIFICADA (ignorando)');
+          } else if (change.type == DocumentChangeType.removed) {
+            if (mounted) {
+              setState(() {
+                _messages.removeWhere((m) => 
+                  m.message == message.message && 
+                  m.user == message.user &&
+                  m.timestamp.difference(message.timestamp).abs().inSeconds < 2
+                );
+              });
+              debugPrint('➖ [Firebase] Mensagem REMOVIDA');
+            }
+          }
+        } catch (e) {
+          debugPrint('⚠️ [Firebase] Erro ao processar mudança: $e');
+        }
+      }
+      
+      // Se for o primeiro snapshot E não temos mensagens, carregar tudo
+      if (_messages.isEmpty && snapshot.docs.isNotEmpty) {
+        debugPrint('📦 [Firebase] Primeira carga - carregando TODAS as mensagens');
+        final allMessages = <ChatMessage>[];
+        
+        for (var doc in snapshot.docs) {
+          try {
+            final data = doc.data();
+            final messageSenderId = data['userId'] ?? data['senderId'];
+            final message = ChatMessage.fromMap(data, isMe: messageSenderId == userId);
+            allMessages.add(message);
+          } catch (e) {
+            debugPrint('⚠️ [Firebase] Erro ao processar mensagem inicial: $e');
+          }
+        }
+        
+        if (mounted && allMessages.isNotEmpty) {
+          setState(() {
+            _messages.clear();
+            _messages.addAll(allMessages);
+          });
+          debugPrint('✅ [Firebase] ${_messages.length} mensagens iniciais carregadas');
+          _scrollToBottom();
+        }
+      }
+    }, onError: (error) {
+      debugPrint('❌ [Firebase] Erro no listener de mensagens: $error');
     });
   }
 
@@ -305,17 +441,17 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> with WidgetsBinding
     WidgetsBinding.instance.removeObserver(this);
     _messageController.dispose();
     _scrollController.dispose();
-    // ✅ Cancelar listener do Firestore
+    // ✅ Cancelar listeners do Firestore
     _orderSubscription?.cancel();
+    _messagesSubscription?.cancel(); // 🔥 Cancelar listener de mensagens
     
     // ✅ Desmarcar chat ativo para permitir notificações novamente
     ChatService.setActiveChatOrder(null);
     
-    // ✅ NÃO desconectar o chat ao sair da página
-    // O chat só deve desconectar quando:
-    // 1. Pedido for entregue/cancelado
-    // 2. Usuário fizer logout
-    debugPrint('📦 [OrderDetailsPage] Saindo da página, mantendo chat conectado para notificações');
+    // 🔴 CORREÇÃO: SEMPRE desconectar o chat ao sair da página
+    // Evita conexões duplicadas quando voltar
+    debugPrint('📦 [OrderDetailsPage] Saindo da página, desconectando chat...');
+    ChatService.disconnect(orderId: widget.order.id);
     
     super.dispose();
   }

@@ -46,6 +46,18 @@ class _PaymentMethodPageState extends State<PaymentMethodPage> {
   @override
   void initState() {
     super.initState();
+    
+    // 🏪 Forçar pickup se houver produtos pickup-only
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final cartState = context.read<CartState>();
+      if (cartState.hasPickupOnlyProducts) {
+        setState(() {
+          _deliveryMethod = 'pickup';
+        });
+        debugPrint('🏪 Produtos pickup-only detectados - método forçado para pickup');
+      }
+    });
+    
     _loadDeliveryFee();
   }
   Future<void> _loadDeliveryFee() async {
@@ -109,24 +121,35 @@ class _PaymentMethodPageState extends State<PaymentMethodPage> {
   Map<String, dynamic> _buildAddressData(dynamic address, String formattedAddress) {
     // ✅ API espera campos individuais (street, number, etc) + method
     if (address is Map) {
-      return {
+      final result = {
         'method': _deliveryMethod, // 'delivery' ou 'pickup'
         'street': address['street'] ?? '',
         'number': address['number'] ?? '',
-        'complement': address['complement'] ?? '',
+        'complement': address['complement'] ?? '', // ✅ Incluir complemento
         'neighborhood': address['neighborhood'] ?? '',
         'city': address['city'] ?? '',
         'state': address['state'] ?? '',
         'zipCode': address['zipCode'] ?? '',
         'fullAddress': formattedAddress, // Enviar também formatado
       };
+      
+      // 🔍 DEBUG: Verificar se complement está sendo enviado
+      debugPrint('📦 [BuildAddressData] deliveryAddress sendo enviado para API:');
+      debugPrint('   complement: "${result['complement']}"');
+      debugPrint('   address completo: $result');
+      
+      return result;
     }
 
     // Fallback para string
-    return {
+    final result = {
       'fullAddress': formattedAddress,
       'method': _deliveryMethod,
+      'complement': '', // ✅ Garantir que complement existe mesmo no fallback
     };
+    
+    debugPrint('📦 [BuildAddressData] Usando fallback (string): $result');
+    return result;
   }
 
   /// ✅ Parse de endereço no formato: "R. Fulana, 123 - Bairro, Cidade/Estado CEP: 12345-000"
@@ -308,6 +331,11 @@ class _PaymentMethodPageState extends State<PaymentMethodPage> {
       String deliveryAddressString;
 
       debugPrint('🏠 [Address Debug] userData[\'address\']: ${userData['address']}');
+      
+      // 🔍 DEBUG: Verificar se complement está presente
+      if (address is Map) {
+        debugPrint('🏠 [Address Debug] complement no userData: "${address['complement']}"');
+      }
 
       if (address == null) {
         if (_deliveryMethod == 'delivery') {
@@ -378,6 +406,7 @@ class _PaymentMethodPageState extends State<PaymentMethodPage> {
                   ))
               .toList(),
           brandName: cartItem.brandName,
+          advancedToppingsSelections: cartItem.advancedToppingsSelections, // 🍕 ADICIONAIS AVANÇADOS
         );
       }).toList();
 
@@ -795,6 +824,10 @@ class _PaymentMethodPageState extends State<PaymentMethodPage> {
   }
 
   Widget _buildDeliveryMethodSelector(bool isPickup, double deliveryFee) {
+    // 🏪 Verificar se há produtos que exigem pickup only
+    final cartState = context.watch<CartState>();
+    final hasPickupOnlyProducts = cartState.hasPickupOnlyProducts;
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -814,27 +847,62 @@ class _PaymentMethodPageState extends State<PaymentMethodPage> {
             ),
           ),
           const SizedBox(height: 12),
-          _buildDeliveryMethodTile(
-            title: 'Entrega em casa',
-            subtitle: 'Receba no endereço cadastrado',
-            value: 'delivery',
-            selected: _deliveryMethod == 'delivery',
-            trailing: _isLoadingDeliveryFee
-                ? const SizedBox(
-                    height: 16,
-                    width: 16,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Color(0xFFE39110),
+
+          // 🏪 AVISO: Produtos pickup-only no carrinho
+          if (hasPickupOnlyProducts)
+            Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.orange.shade100.withValues(alpha: 0.15),
+                border: Border.all(color: Colors.orange, width: 1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.info_outline, color: Colors.orange, size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Seu pedido contém produtos que só podem ser retirados no local',
+                      style: const TextStyle(color: Colors.orange, fontSize: 13),
                     ),
-                  )
-                : Text(
-                    'Taxa: R\$ ${deliveryFee.toStringAsFixed(2)}',
-                    style: const TextStyle(color: Colors.white70),
                   ),
+                ],
+              ),
+            ),
+
+          // 🚫 Desabilitado se houver produtos pickup-only
+          Opacity(
+            opacity: hasPickupOnlyProducts ? 0.4 : 1.0,
+            child: IgnorePointer(
+              ignoring: hasPickupOnlyProducts,
+              child: _buildDeliveryMethodTile(
+                title: 'Entrega em casa',
+                subtitle: hasPickupOnlyProducts 
+                  ? 'Não disponível para este pedido'
+                  : 'Receba no endereço cadastrado',
+                value: 'delivery',
+                selected: _deliveryMethod == 'delivery' && !hasPickupOnlyProducts,
+                trailing: _isLoadingDeliveryFee
+                    ? const SizedBox(
+                        height: 16,
+                        width: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Color(0xFFE39110),
+                        ),
+                      )
+                    : Text(
+                        'Taxa: R\$ ${deliveryFee.toStringAsFixed(2)}',
+                        style: const TextStyle(color: Colors.white70),
+                      ),
+              ),
+            ),
           ),
-          // ✨ Botão para mudar endereço (só aparece quando delivery está selecionado)
-          if (_deliveryMethod == 'delivery')
+
+          // ✨ Botão para mudar endereço (só aparece quando delivery está selecionado E não há pickup-only)
+          if (_deliveryMethod == 'delivery' && !hasPickupOnlyProducts)
             Padding(
               padding: const EdgeInsets.only(left: 40, top: 4, bottom: 4),
               child: GestureDetector(

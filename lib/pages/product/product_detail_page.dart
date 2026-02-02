@@ -5,10 +5,12 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../../models/product_model.dart';
 import '../../models/brand_variant.dart';
+import '../../models/topping_section.dart';
 import '../../state/cart_state.dart';
 import '../cart/cart_page.dart';
 import '../../services/product_suggestions_service.dart';
 import '../../widgets/suggestions/product_suggestions_bottom_sheet.dart';
+import '../../widgets/advanced_toppings_builder.dart';
 
 class ProductDetailPage extends StatefulWidget {
   final ProductModel product;
@@ -28,6 +30,12 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   Map<String, dynamic>? _productData;
   bool _isLoading = true;
   BrandVariant? _selectedBrand;
+  
+  // 🍕 ADICIONAIS AVANÇADOS
+  List<SelectedTopping> _advancedToppingsSelections = [];
+  double _advancedToppingsTotalPrice = 0.0;
+  bool _advancedToppingsValid = false;
+  String? _advancedToppingsErrorMessage;
 
   @override
   void initState() {
@@ -126,6 +134,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
             restaurantId: product.restaurantId,
             restaurantName: product.restaurantName ?? 'Restaurante',
             hasMultipleBrands: product.hasMultipleBrands,
+            pickupOnly: product.pickupOnly, // 🏪 PICKUP ONLY
           );
           
           // Feedback de sucesso
@@ -158,6 +167,24 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
     }
     return [];
   }
+  
+  // 🍕 GETTERS PARA ADICIONAIS AVANÇADOS
+  bool get _useAdvancedToppings {
+    if (_productData == null) return false;
+    return _productData!['useAdvancedToppings'] == true;
+  }
+  
+  List<ToppingSection> get _advancedToppings {
+    if (_productData == null || !_useAdvancedToppings) return [];
+    
+    final toppings = _productData!['advancedToppings'];
+    if (toppings is List) {
+      return toppings
+          .map((section) => ToppingSection.fromJson(section as Map<String, dynamic>))
+          .toList();
+    }
+    return [];
+  }
 
   List<BrandVariant> get _brands {
     if (!widget.product.hasMultipleBrands) return [];
@@ -181,9 +208,15 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
   double get _totalPrice {
     double total = _currentPrice * _quantity;
 
-    for (var addon in _addons) {
-      if (_selectedAddons[addon['name']] == true) {
-        total += (addon['price'] as double) * _quantity;
+    // 🍕 Se usa adicionais avançados, soma o preço deles
+    if (_useAdvancedToppings) {
+      total += _advancedToppingsTotalPrice * _quantity;
+    } else {
+      // Sistema simples de addons
+      for (var addon in _addons) {
+        if (_selectedAddons[addon['name']] == true) {
+          total += (addon['price'] as double) * _quantity;
+        }
       }
     }
 
@@ -196,12 +229,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       body: _isLoading
           ? Container(
               decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [Color(0xFF5D1C17), Color(0xFF0D3B3B)], // Vinho escuro → Verde lodo
-                  stops: [0.0, 1.0],
-                ),
+                color: Color(0xFF0D3B3B), // Verde escuro sólido igual home
               ),
               child: const Center(
                 child: CircularProgressIndicator(color: Color(0xFFE39110)),
@@ -209,12 +237,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
             )
           : Container(
               decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [Color(0xFF5D1C17), Color(0xFF0D3B3B)], // Vinho escuro → Verde lodo
-                  stops: [0.0, 1.0],
-                ),
+                color: Color(0xFF0D3B3B), // Verde escuro sólido igual home
               ),
               child: CustomScrollView(
                 slivers: [
@@ -227,7 +250,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                         if (_badges.isNotEmpty) _buildBadgesSection(),
                         _buildDescription(),
                         if (_brands.isNotEmpty) _buildBrandSelector(),
-                        if (_addons.isNotEmpty) _buildAddonsSection(),
+                        _buildAddonsOrAdvancedToppings(), // 🍕 INTEGRAÇÃO CIRÚRGICA
                         const SizedBox(height: 100),
                       ],
                     ),
@@ -355,6 +378,42 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                   ),
                 ),
               ),
+              
+              // 🏪 Badge "Somente Retirada" (se pickupOnly)
+              if (widget.product.pickupOnly)
+                Positioned(
+                  top: 16,
+                  left: 16,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.orange,
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.3),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.store, size: 16, color: Colors.white),
+                        const SizedBox(width: 6),
+                        const Text(
+                          'Somente retirada no local',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
@@ -393,26 +452,28 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
             ),
           ),
           const SizedBox(height: 12),
-          Text(
-            widget.product.formattedPrice,
-            style: TextStyle(
-              fontSize: 32,
-              fontWeight: FontWeight.bold,
-              color: const Color(0xFFE39110),
-              shadows: [
-                Shadow(
-                  color: Colors.white.withValues(alpha: 0.6),
-                  blurRadius: 10,
-                  offset: const Offset(0, 0),
-                ),
-                Shadow(
-                  color: Colors.black.withValues(alpha: 0.4),
-                  blurRadius: 4,
-                  offset: const Offset(0, 2),
-                ),
-              ],
+          // 🔒 Não mostrar preço quando usa adicionais avançados (preço varia conforme seleções)
+          if (!_useAdvancedToppings)
+            Text(
+              widget.product.formattedPrice,
+              style: TextStyle(
+                fontSize: 32,
+                fontWeight: FontWeight.bold,
+                color: const Color(0xFFE39110),
+                shadows: [
+                  Shadow(
+                    color: Colors.white.withValues(alpha: 0.6),
+                    blurRadius: 10,
+                    offset: const Offset(0, 0),
+                  ),
+                  Shadow(
+                    color: Colors.black.withValues(alpha: 0.4),
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
             ),
-          ),
         ],
       ),
     );
@@ -534,6 +595,33 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
               ],
             ),
           ),
+          
+          // 🏪 Motivo do pickup-only (se houver)
+          if (widget.product.pickupOnly && widget.product.pickupOnlyReason != null)
+            Container(
+              margin: const EdgeInsets.only(top: 12),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.orange.shade100.withValues(alpha: 0.2),
+                border: Border.all(color: Colors.orange.shade200, width: 1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.info_outline, color: Colors.orange, size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      widget.product.pickupOnlyReason!,
+                      style: const TextStyle(
+                        color: Colors.orange,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
         ],
       ),
     );
@@ -862,6 +950,31 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       ),
     );
   }
+  
+  // 🍕 MÉTODO CIRÚRGICO: Decide qual sistema de adicionais mostrar
+  Widget _buildAddonsOrAdvancedToppings() {
+    if (_useAdvancedToppings && _advancedToppings.isNotEmpty) {
+      // Sistema novo: Adicionais avançados (seções)
+      return AdvancedToppingsBuilder(
+        sections: _advancedToppings,
+        onSelectionsChanged: (selections, totalPrice, isValid, errorMessage) {
+          setState(() {
+            _advancedToppingsSelections = selections;
+            _advancedToppingsTotalPrice = totalPrice;
+            _advancedToppingsValid = isValid;
+            _advancedToppingsErrorMessage = errorMessage;
+          });
+        },
+        accentColor: const Color(0xFFE39110),
+      );
+    } else if (_addons.isNotEmpty) {
+      // Sistema antigo: Adicionais simples (checkboxes)
+      return _buildAddonsSection();
+    }
+    
+    // Nenhum sistema de adicionais
+    return const SizedBox.shrink();
+  }
 
   Widget _buildBottomBar() {
     return Container(
@@ -872,15 +985,16 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
       child: SafeArea(
         child: Row(
           children: [
-            // Controle de quantidade
-            Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(
-                  color: Colors.white.withValues(alpha: 0.6),
-                  width: 2,
+            // Controle de quantidade - esconde quando usa adicionais avançados
+            if (!_useAdvancedToppings)
+              Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.6),
+                    width: 2,
+                  ),
                 ),
-              ),
               child: Row(
                 children: [
                   IconButton(
@@ -913,27 +1027,37 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                 ],
               ),
             ),
-            const SizedBox(width: 16),
+            if (!_useAdvancedToppings) const SizedBox(width: 16),
             // Botão adicionar ao carrinho
             Expanded(
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [Color(0xFFE39110), Color(0xFFDA8520)],
-                  ),
-                  borderRadius: BorderRadius.circular(14),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFFE39110).withValues(alpha: 0.5),
-                      blurRadius: 12,
-                      offset: const Offset(0, 4),
+              child: Opacity(
+                opacity: (_useAdvancedToppings && !_advancedToppingsValid) ? 0.5 : 1.0, // ⚙️ Visual feedback
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [Color(0xFFE39110), Color(0xFFDA8520)],
                     ),
-                  ],
-                ),
-                child: ElevatedButton(
-                  onPressed: () {
+                    borderRadius: BorderRadius.circular(14),
+                    border: (!_useAdvancedToppings || _advancedToppingsValid)
+                        ? Border.all(
+                            color: const Color(0xFF5A1C18), // Vermelho vinho
+                            width: 2,
+                          )
+                        : null, // Sem borda quando desabilitado
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFFE39110).withValues(alpha: 0.5),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: ElevatedButton(
+                    onPressed: (_useAdvancedToppings && !_advancedToppingsValid)
+                        ? null // ❌ Desabilitado quando adicionais avançados estão incompletos
+                        : () {
                     final cart = context.read<CartState>();
 
                     // Validar seleção de marca se necessário
@@ -972,6 +1096,14 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                         });
                       }
                     }
+                    
+                    // 🍕 Prepara seleções de adicionais avançados (se houver)
+                    List<Map<String, dynamic>>? advancedSelectionsJson;
+                    if (_useAdvancedToppings && _advancedToppingsSelections.isNotEmpty) {
+                      advancedSelectionsJson = _advancedToppingsSelections
+                          .map((s) => s.toJson())
+                          .toList();
+                    }
 
                     // ✅ Adiciona ao carrinho
                     for (int i = 0; i < _quantity; i++) {
@@ -985,6 +1117,8 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                         restaurantName: widget.product.restaurantName ?? 'Restaurante',
                         brandName: _selectedBrand?.brandName,
                         hasMultipleBrands: widget.product.hasMultipleBrands,
+                        advancedToppingsSelections: advancedSelectionsJson, // 🍕 CIRÚRGICO
+                        pickupOnly: widget.product.pickupOnly, // 🏪 PICKUP ONLY
                       );
                     }
 
@@ -1014,15 +1148,21 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                       });
                     }
 
-                    // Reset quantidade
+                    // Reset quantidade e seleções
                     setState(() {
                       _quantity = 1;
                       _selectedAddons.clear();
+                      _advancedToppingsSelections = []; // 🍕 RESET ADICIONAIS AVANÇADOS
+                      _advancedToppingsTotalPrice = 0.0;
+                      _advancedToppingsValid = false; // ⚠️ RESETAR VALIDAÇÃO
+                      _advancedToppingsErrorMessage = null; // ⚠️ LIMPAR MENSAGEM DE ERRO
                     });
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.transparent,
                     foregroundColor: Colors.white,
+                    disabledBackgroundColor: Colors.transparent, // ⚙️ Transparente quando desabilitado
+                    disabledForegroundColor: Colors.white, // ⚙️ Texto branco mesmo quando desabilitado para facilitar leitura
                     shadowColor: Colors.transparent,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(
@@ -1036,7 +1176,9 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                       const SizedBox(width: 10),
                       Flexible(
                         child: Text(
-                          'Adicionar • R\$ ${_totalPrice.toStringAsFixed(2).replaceAll('.', ',')}',
+                          _useAdvancedToppings && !_advancedToppingsValid && _advancedToppingsErrorMessage != null
+                              ? _advancedToppingsErrorMessage!
+                              : 'Adicionar • R\$ ${_totalPrice.toStringAsFixed(2).replaceAll('.', ',')}',
                           style: const TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
@@ -1049,6 +1191,7 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                   ),
                 ),
               ),
+            ),
             ),
           ],
         ),

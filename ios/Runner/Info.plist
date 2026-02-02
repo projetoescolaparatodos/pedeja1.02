@@ -54,5 +54,15 @@
 		<string>Precisamos acessar suas fotos para você adicionar imagens ao seu perfil.</string>
 		<key>ITSAppUsesNonExemptEncryption</key>
 		<false/>
-	</dict>
-</plist>
+	<!-- 🔔 Firebase Cloud Messaging - Notificações Push -->
+	<key>FirebaseAppDelegateProxyEnabled</key>
+	<true/>
+	<!-- 🔔 Background Modes para notificações remotas -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+		<string>fetch</string>
+	</array>
+	<!-- 🔔 Permissões de notificação -->
+	<key>NSUserNotificationUsageDescription</key>
+	<string>Precisamos enviar notificações sobre seus pedidos e mensagens do chat.</string>

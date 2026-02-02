@@ -33,8 +33,11 @@ class ProductCard extends StatelessWidget {
       child: Container(
         decoration: BoxDecoration(
           border: Border.all(
-            color: const Color(0xFFE39110), // Borda dourada
-            width: 1,
+            // 🍕 Borda branca se tiver adicionais avançados, dourada normal caso contrário
+            color: product.useAdvancedToppings 
+                ? Colors.white // Branco
+                : const Color(0xFFE39110), // Dourado normal
+            width: 1, // Mesma espessura para ambos
           ),
           borderRadius: BorderRadius.circular(16),
         ),
@@ -125,7 +128,10 @@ class ProductCard extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: const Color(0xFF0D3B3B), // Verde escuro
                     border: Border.all(
-                      color: const Color(0xFFE39110), // Borda dourada
+                      // 🍕 Borda branca se produto tem adicionais avançados
+                      color: product.useAdvancedToppings
+                          ? Colors.white // Branco
+                          : const Color(0xFFE39110), // Dourado normal
                       width: 1,
                     ),
                     borderRadius: BorderRadius.circular(8),
@@ -137,6 +143,36 @@ class ProductCard extends StatelessWidget {
                       fontSize: 10,
                       fontWeight: FontWeight.bold,
                     ),
+                  ),
+                ),
+              ),
+
+            // 🧩 Ícone de quebra-cabeça para produtos com adicionais avançados
+            if (product.useAdvancedToppings)
+              Positioned(
+                top: -4, // Parcialmente fora do card
+                left: -4, // Parcialmente fora do card (lado esquerdo)
+                child: Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0D3B3B), // Fundo verde escuro
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: Colors.white, // Borda branca
+                      width: 2.5,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.4),
+                        blurRadius: 8,
+                        spreadRadius: 1,
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    Icons.extension,
+                    color: Colors.white, // Ícone branco
+                    size: 22,
                   ),
                 ),
               ),
@@ -200,34 +236,35 @@ class ProductCard extends StatelessWidget {
                     ),
                   ),
 
-                  // BADGE DE PREÇO
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF0D3B3B), // Verde escuro
-                        border: Border.all(
-                          color: const Color(0xFFE39110), // Borda dourada
-                          width: 1.5,
+                  // BADGE DE PREÇO (só para produtos normais, sem adicionais avançados)
+                  if (!product.useAdvancedToppings)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
                         ),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        product.hasPriceRange 
-                            ? product.priceRangeText
-                            : product.formattedPrice,
-                        style: const TextStyle(
-                          color: Color(0xFFE39110), // Texto dourado
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0D3B3B), // Verde escuro
+                          border: Border.all(
+                            color: const Color(0xFFE39110), // Dourado
+                            width: 1.5,
+                          ),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          product.hasPriceRange 
+                              ? product.priceRangeText
+                              : product.formattedPrice,
+                          style: const TextStyle(
+                            color: Color(0xFFE39110), // Texto dourado
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
                     ),
-                  ),
                 ],
               ),
             ),

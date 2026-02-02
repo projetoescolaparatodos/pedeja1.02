@@ -60,6 +60,37 @@ class _CompleteProfilePageState extends State<CompleteProfilePage> {
 
   bool _loading = false;
   bool _loadingGPS = false;
+  bool _bairroRestrito = false; // ✅ Controla se bairro é São Francisco
+
+  /// Verifica se bairro é São Francisco (variações)
+  bool _isBairroSaoFrancisco(String bairro) {
+    if (bairro.trim().isEmpty) return false;
+    
+    // Normaliza: remove acentos e lowercase
+    final normalizado = bairro
+        .toLowerCase()
+        .replaceAll('ã', 'a')
+        .replaceAll('á', 'a')
+        .replaceAll('â', 'a')
+        .replaceAll('é', 'e')
+        .replaceAll('ê', 'e')
+        .replaceAll('í', 'i')
+        .replaceAll('ó', 'o')
+        .replaceAll('ô', 'o')
+        .replaceAll('ú', 'u')
+        .trim();
+    
+    // Aceita todas as variações:
+    // - "sao francisco", "são francisco" (completo)
+    // - "s. francisco", "s.francisco" (abreviado com ponto)
+    // - "s francisco" (abreviado sem ponto)
+    // - "s francisto" (erro de digitação comum)
+    return normalizado.contains('sao francisco') || 
+           normalizado.contains('s. francisco') ||
+           normalizado.contains('s.francisco') ||
+           normalizado.contains('s francisco') ||
+           normalizado.contains('s francisto');
+  }
 
   /// Converte nome de estado para sigla (ex: "Pará" → "PA")
   String _normalizarEstado(String estado) {
@@ -79,6 +110,9 @@ class _CompleteProfilePageState extends State<CompleteProfilePage> {
     super.initState();
     debugPrint('🏗️ [CompleteProfilePage] initState chamado');
     
+    // ✅ Pré-preencher cidade com "Vitória do Xingu" (IMUTÁVEL)
+    _cityController.text = 'Vitória do Xingu';
+    
     // ⚡ Carrega dados após o primeiro frame
     WidgetsBinding.instance.addPostFrameCallback((_) {
       debugPrint('⚡ [CompleteProfilePage] PostFrameCallback executado');
@@ -86,6 +120,16 @@ class _CompleteProfilePageState extends State<CompleteProfilePage> {
       
       // ✅ Ativa GPS automaticamente
       _useGPSLocation();
+    });
+    
+    // ✅ Listener no campo de bairro para validar São Francisco
+    _neighborhoodController.addListener(() {
+      final isSaoFrancisco = _isBairroSaoFrancisco(_neighborhoodController.text);
+      if (isSaoFrancisco != _bairroRestrito) {
+        setState(() {
+          _bairroRestrito = isSaoFrancisco;
+        });
+      }
     });
   }
 
@@ -135,21 +179,26 @@ class _CompleteProfilePageState extends State<CompleteProfilePage> {
       final userState = context.read<UserState>();
 
       debugPrint('💾 [CompleteProfilePage] Salvando perfil via API...');
+      
+      // 🔍 DEBUG: Verificar se complement está sendo enviado
+      final addressData = {
+        'zipCode': _zipCodeController.text.trim(),
+        'street': _streetController.text.trim(),
+        'number': _numberController.text.trim(),
+        'complement': _complementController.text.trim(),
+        'neighborhood': _neighborhoodController.text.trim(),
+        'city': _cityController.text.trim(),
+        'state': _stateController.text.trim().toUpperCase(),
+        'formatted': '${_streetController.text.trim()}, ${_numberController.text.trim()} - ${_neighborhoodController.text.trim()}, ${_cityController.text.trim()}/${_stateController.text.trim().toUpperCase()}',
+      };
+      debugPrint('📍 [CompleteProfilePage] Address sendo enviado: $addressData');
+      debugPrint('🏠 [CompleteProfilePage] Complement especificamente: "${_complementController.text.trim()}"');
 
       // 1️⃣ Chama API para completar registro
       final success = await authState.completeRegistration(
         displayName: _nameController.text.trim(),
         phone: _phoneController.text.trim(),
-        address: {
-          'zipCode': _zipCodeController.text.trim(),
-          'street': _streetController.text.trim(),
-          'number': _numberController.text.trim(),
-          'complement': _complementController.text.trim(),
-          'neighborhood': _neighborhoodController.text.trim(),
-          'city': _cityController.text.trim(),
-          'state': _stateController.text.trim().toUpperCase(),
-          'formatted': '${_streetController.text.trim()}, ${_numberController.text.trim()} - ${_neighborhoodController.text.trim()}, ${_cityController.text.trim()}/${_stateController.text.trim().toUpperCase()}',
-        },
+        address: addressData,
       );
 
       if (!mounted) return;
@@ -231,9 +280,13 @@ class _CompleteProfilePageState extends State<CompleteProfilePage> {
         _streetController.text = address['street'] ?? '';
         _numberController.text = address['number'] ?? '';
         _neighborhoodController.text = address['neighborhood'] ?? '';
-        _cityController.text = address['city'] ?? '';
+        // ✅ NÃO sobrescrever cidade - manter "Vitória do Xingu"
+        // _cityController.text = address['city'] ?? ''; // ← DESABILITADO
         _stateController.text = _normalizarEstado(address['state'] ?? '');
         _zipCodeController.text = address['zipCode'] ?? '';
+        
+        // ✅ Validar se bairro do GPS é São Francisco
+        _bairroRestrito = _isBairroSaoFrancisco(address['neighborhood'] ?? '');
       });
 
       if (!mounted) return;
@@ -482,7 +535,7 @@ class _CompleteProfilePageState extends State<CompleteProfilePage> {
 
               const SizedBox(height: 16),
 
-              // Bairro
+              // Bairro (com validação de São Francisco)
               _buildTextField(
                 controller: _neighborhoodController,
                 label: 'Bairro *',
@@ -491,9 +544,42 @@ class _CompleteProfilePageState extends State<CompleteProfilePage> {
                   if (value == null || value.trim().isEmpty) {
                     return 'Bairro é obrigatório';
                   }
+                  if (_isBairroSaoFrancisco(value)) {
+                    return 'Ainda não entregamos neste bairro';
+                  }
                   return null;
                 },
               ),
+              
+              // ⚠️ Aviso se bairro for São Francisco
+              if (_bairroRestrito)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.shade100,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.orange, width: 1),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.warning_amber, color: Colors.orange, size: 20),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Ainda não entregamos no bairro São Francisco',
+                            style: TextStyle(
+                              color: Colors.orange.shade900,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
 
               const SizedBox(height: 16),
 
@@ -506,6 +592,7 @@ class _CompleteProfilePageState extends State<CompleteProfilePage> {
                       controller: _cityController,
                       label: 'Cidade *',
                       icon: Icons.business,
+                      enabled: false, // ✅ Campo IMUTÁVEL
                       validator: (value) {
                         if (value == null || value.trim().isEmpty) {
                           return 'Cidade é obrigatória';
@@ -559,7 +646,7 @@ class _CompleteProfilePageState extends State<CompleteProfilePage> {
                 width: double.infinity,
                 height: 54,
                 child: ElevatedButton(
-                  onPressed: _loading ? null : _saveProfile,
+                  onPressed: (_loading || _bairroRestrito) ? null : _saveProfile,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFE39110),
                     foregroundColor: Colors.white,
@@ -600,18 +687,20 @@ class _CompleteProfilePageState extends State<CompleteProfilePage> {
     String? Function(String?)? validator,
     TextInputType? keyboardType,
     List<TextInputFormatter>? inputFormatters,
+    bool enabled = true, // ✅ Novo parâmetro
     TextCapitalization textCapitalization = TextCapitalization.none,
     int? maxLength,
     void Function(String)? onChanged,
   }) {
     return TextFormField(
       controller: controller,
+      enabled: enabled, // ✅ Aplicar enabled
       decoration: InputDecoration(
         labelText: label,
         labelStyle: const TextStyle(color: Colors.white70),
         prefixIcon: Icon(icon, color: const Color(0xFFE39110)),
         filled: true,
-        fillColor: const Color(0xFF022E28),
+        fillColor: enabled ? const Color(0xFF022E28) : const Color(0xFF022E28).withValues(alpha: 0.5), // ✅ Fundo escuro se disabled
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide.none,
@@ -630,7 +719,7 @@ class _CompleteProfilePageState extends State<CompleteProfilePage> {
         ),
         counterText: '', // Remove contador
       ),
-      style: const TextStyle(color: Colors.white),
+      style: TextStyle(color: enabled ? Colors.white : Colors.white54), // ✅ Cor diferente se disabled
       validator: validator,
       keyboardType: keyboardType,
       inputFormatters: inputFormatters,

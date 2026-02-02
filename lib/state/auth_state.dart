@@ -6,6 +6,7 @@ import '../services/auth_service.dart';
 import '../services/notification_service.dart';
 import '../services/order_status_listener_service.dart';
 import '../services/order_status_pusher_service.dart';
+import '../services/chat_service.dart'; // ✅ Import ChatService
 import '../utils/ios_logout_handler.dart';
 
 /// 🔐 Estado de Autenticação com Provider
@@ -234,6 +235,19 @@ class AuthState extends ChangeNotifier {
               userId: userId,
               authToken: _authService.jwtToken,
             );
+            
+            // 💬 NOVO: Inicializar ChatService globalmente para notificações de chat
+            try {
+              debugPrint('💬 [AuthState] Inicializando ChatService globalmente');
+              await ChatService.initializeGlobally(
+                authToken: _authService.jwtToken!,
+                userId: userId,
+              );
+              debugPrint('✅ [AuthState] ChatService conectado globalmente');
+            } catch (e) {
+              debugPrint('⚠️ [AuthState] Erro ao conectar ChatService (não crítico): $e');
+              // Não falhar o login se chat não conectar
+            }
           }
         }
         
@@ -500,6 +514,14 @@ class AuthState extends ChangeNotifier {
           await NotificationService.clearToken();
           await OrderStatusListenerService.stopListeningToAllOrders();
           OrderStatusListenerService.clearCache();
+          
+          // 💬 Desconectar ChatService globalmente
+          try {
+            await ChatService.disconnectGlobally();
+            debugPrint('✅ [AuthState] ChatService desconectado globalmente');
+          } catch (e) {
+            debugPrint('⚠️ [AuthState] Erro ao desconectar ChatService: $e');
+          }
         },
       );
       
@@ -540,6 +562,15 @@ class AuthState extends ChangeNotifier {
         await OrderStatusListenerService.stopListeningToAllOrders();
         OrderStatusListenerService.clearCache();
         await OrderStatusPusherService.disconnect();
+        
+        // 💬 Desconectar ChatService globalmente
+        try {
+          await ChatService.disconnectGlobally();
+          debugPrint('✅ [AuthState] ChatService desconectado globalmente');
+        } catch (e) {
+          debugPrint('⚠️ [AuthState] Erro ao desconectar ChatService: $e');
+        }
+        
         await _authService.clearCredentials();
         debugPrint('✅ Serviços limpos');
       } catch (e) {

@@ -24,6 +24,16 @@ class CartState extends ChangeNotifier {
   double get total {
     return _items.fold(0.0, (sum, item) => sum + item.totalPrice);
   }
+  
+  // 🏪 Verifica se há produtos que exigem pickup
+  bool get hasPickupOnlyProducts {
+    return _items.any((item) => item.pickupOnly == true);
+  }
+  
+  // 🏪 Lista produtos que exigem pickup
+  List<CartItem> get pickupOnlyProducts {
+    return _items.where((item) => item.pickupOnly == true).toList();
+  }
 
   // ➕ ADICIONAR ITEM AO CARRINHO
   void addItem({
@@ -36,12 +46,15 @@ class CartState extends ChangeNotifier {
     String? restaurantName,
     String? brandName,
     bool hasMultipleBrands = false,
+    List<Map<String, dynamic>>? advancedToppingsSelections, // 🍕 ADICIONAIS AVANÇADOS
+    bool pickupOnly = false, // 🏪 PICKUP ONLY
   }) {
     // Verifica se já existe no carrinho
     final existingIndex = _items.indexWhere((item) => 
       item.id == productId && 
       _addonsAreEqual(item.addons, addons) &&
-      item.brandName == brandName
+      item.brandName == brandName &&
+      _advancedToppingsAreEqual(item.advancedToppingsSelections, advancedToppingsSelections)
     );
 
     if (existingIndex >= 0) {
@@ -61,6 +74,8 @@ class CartState extends ChangeNotifier {
         restaurantName: restaurantName,
         brandName: brandName,
         hasMultipleBrands: hasMultipleBrands,
+        advancedToppingsSelections: advancedToppingsSelections, // 🍕 ADICIONAIS AVANÇADOS
+        pickupOnly: pickupOnly, // 🏪 PICKUP ONLY
       ));
     }
 
@@ -106,6 +121,32 @@ class CartState extends ChangeNotifier {
     
     for (int i = 0; i < a.length; i++) {
       if (a[i]['id'] != b[i]['id']) return false;
+    }
+    
+    return true;
+  }
+  
+  // 🍕 Compara se dois arrays de adicionais avançados são iguais
+  bool _advancedToppingsAreEqual(
+    List<Map<String, dynamic>>? a, 
+    List<Map<String, dynamic>>? b
+  ) {
+    // Se ambos são null, são iguais
+    if (a == null && b == null) return true;
+    
+    // Se um é null e outro não, são diferentes
+    if (a == null || b == null) return false;
+    
+    // Se tamanhos diferentes, são diferentes
+    if (a.length != b.length) return false;
+    
+    // Compara cada seleção (sectionId + itemId + quantity)
+    for (int i = 0; i < a.length; i++) {
+      if (a[i]['sectionId'] != b[i]['sectionId'] ||
+          a[i]['itemId'] != b[i]['itemId'] ||
+          a[i]['quantity'] != b[i]['quantity']) {
+        return false;
+      }
     }
     
     return true;

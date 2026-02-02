@@ -1,4 +1,5 @@
 import 'brand_variant.dart';
+import 'topping_section.dart';
 
 /// Modelo de dados para produtos da API PedeJá
 class ProductModel {
@@ -17,6 +18,14 @@ class ProductModel {
   final bool hasMultipleBrands;
   final List<BrandVariant> brands;
   final List<String> suggestedWith; // IDs dos produtos sugeridos
+  
+  // 🍕 SISTEMA DE ADICIONAIS AVANÇADOS
+  final bool useAdvancedToppings;
+  final List<ToppingSection> advancedToppings;
+  
+  // 🏪 PRODUTOS SOMENTE RETIRADA (PICKUP ONLY)
+  final bool pickupOnly;
+  final String? pickupOnlyReason;
 
   ProductModel({
     required this.id,
@@ -34,6 +43,10 @@ class ProductModel {
     this.hasMultipleBrands = false,
     this.brands = const [],
     this.suggestedWith = const [],
+    this.useAdvancedToppings = false,
+    this.advancedToppings = const [],
+    this.pickupOnly = false,
+    this.pickupOnlyReason,
   });
 
   /// Converte JSON da API para ProductModel
@@ -74,6 +87,16 @@ class ProductModel {
       suggestedWith: (json['suggestedWith'] as List<dynamic>?)
           ?.map((e) => e.toString())
           .toList() ?? [],
+      
+      // 🍕 SISTEMA DE ADICIONAIS AVANÇADOS (seções)
+      useAdvancedToppings: json['useAdvancedToppings'] ?? false,
+      advancedToppings: (json['advancedToppings'] as List<dynamic>?)
+          ?.map((section) => ToppingSection.fromJson(section as Map<String, dynamic>))
+          .toList() ?? [],
+      
+      // 🏪 PRODUTOS SOMENTE RETIRADA
+      pickupOnly: json['pickupOnly'] ?? false,
+      pickupOnlyReason: json['pickupOnlyReason'],
     );
   }
 

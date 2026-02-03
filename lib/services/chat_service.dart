@@ -556,41 +556,81 @@ class ChatService {
     required String currentUserId,
   }) async {
     try {
-      debugPrint('📥 [ChatService] Carregando mensagens do backend para pedido $orderId...');
+      debugPrint('📥 [ChatService] ========================================');
+      debugPrint('📥 [ChatService] Carregando mensagens do Firebase...');
+      debugPrint('📥 [ChatService] OrderId: $orderId');
+      debugPrint('📥 [ChatService] CurrentUserId: $currentUserId');
+      debugPrint('📥 [ChatService] Token presente: ${authToken.isNotEmpty}');
+      debugPrint('📥 [ChatService] ========================================');
       
       final backend = BackendOrderService();
       final messagesData = await backend.getChatMessages(
         token: authToken,
         orderId: orderId,
+        limit: 100, // ✅ Buscar últimas 100 mensagens
       );
       
+      debugPrint('📥 [ChatService] Resposta do backend: ${messagesData.length} mensagens');
+      
       if (messagesData.isEmpty) {
-        debugPrint('💬 [ChatService] Nenhuma mensagem no histórico');
+        debugPrint('💬 [ChatService] Nenhuma mensagem no histórico do Firebase');
         return [];
+      }
+      
+      // ✅ Debug: Mostrar estrutura da primeira mensagem
+      if (messagesData.isNotEmpty) {
+        debugPrint('📥 [ChatService] Estrutura da primeira mensagem:');
+        debugPrint('   Keys: ${messagesData[0].keys.join(', ')}');
+        debugPrint('   SenderName: ${messagesData[0]['senderName'] ?? messagesData[0]['user']}');
+        debugPrint('   Message: ${messagesData[0]['message']}');
+        debugPrint('   Timestamp: ${messagesData[0]['timestamp']}');
+        debugPrint('   IsRestaurant: ${messagesData[0]['isRestaurant']}');
+        debugPrint('   UserId/SenderId: ${messagesData[0]['userId'] ?? messagesData[0]['senderId']}');
       }
       
       // Converter para ChatMessage
       final messages = messagesData.map((data) {
-        final messageSenderId = data['userId'] ?? data['senderId'];
-        return ChatMessage.fromMap(data, isMe: messageSenderId == currentUserId);
+        // ✅ Tentar múltiplos campos para sender ID
+        final messageSenderId = data['userId'] ?? data['senderId'] ?? '';
+        final isFromCurrentUser = messageSenderId == currentUserId;
+        
+        debugPrint('   Convertendo: ${data['senderName']} (isMe: $isFromCurrentUser)');
+        
+        return ChatMessage.fromMap(data, isMe: isFromCurrentUser);
       }).toList();
       
       // Ordenar por timestamp (mais antigas primeiro)
       messages.sort((a, b) => a.timestamp.compareTo(b.timestamp));
       
-      // Adicionar ao cache
+      // ✅ Adicionar ao cache (importante para manter histórico)
       if (!_messagesCache.containsKey(orderId)) {
         _messagesCache[orderId] = [];
       }
-      _messagesCache[orderId]!.addAll(messages);
+      
+      // ✅ Não duplicar mensagens já existentes no cache
+      final existingKeys = _messagesCache[orderId]!.map((m) => 
+        '${m.timestamp.millisecondsSinceEpoch}_${m.message}_${m.user}'
+      ).toSet();
+      
+      for (var msg in messages) {
+        final key = '${msg.timestamp.millisecondsSinceEpoch}_${msg.message}_${msg.user}';
+        if (!existingKeys.contains(key)) {
+          _messagesCache[orderId]!.add(msg);
+        }
+      }
+      
+      // Ordenar cache
+      _messagesCache[orderId]!.sort((a, b) => a.timestamp.compareTo(b.timestamp));
       
       // Salvar no storage
       await _saveMessagesToStorage(orderId);
       
-      debugPrint('✅ [ChatService] ${messages.length} mensagens carregadas do backend');
+      debugPrint('✅ [ChatService] ${messages.length} mensagens carregadas do Firebase');
+      debugPrint('✅ [ChatService] Cache agora tem ${_messagesCache[orderId]!.length} mensagens');
       return messages;
-    } catch (e) {
-      debugPrint('❌ [ChatService] Erro ao carregar mensagens do backend: $e');
+    } catch (e, stackTrace) {
+      debugPrint('❌ [ChatService] Erro ao carregar mensagens do Firebase: $e');
+      debugPrint('❌ [ChatService] Stack trace: $stackTrace');
       // Não falhar, apenas retornar lista vazia
       return [];
     }

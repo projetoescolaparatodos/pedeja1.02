@@ -44,7 +44,10 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> with WidgetsBinding
     // ✅ Marcar este chat como ativo para suprimir notificações
     ChatService.setActiveChatOrder(widget.order.id);
     
-    _listenToFirebaseMessages(); // 🔥 Escutar mensagens em tempo real (PRIMEIRO)
+    // ✅ CRÍTICO: Carregar histórico ANTES de conectar ao Pusher
+    _loadCachedMessages();
+    
+    _listenToFirebaseMessages(); // 🔥 Escutar mensagens em tempo real (COMPLEMENTAR)
     _initializeChat(); // Pusher como complemento
     _listenToOrderChanges(); // ✅ Escutar mudanças no pedido
   }
@@ -73,9 +76,14 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> with WidgetsBinding
   }
 
   Future<void> _loadCachedMessages() async {
+    debugPrint('🔍 [OrderDetailsPage] ========================================');
+    debugPrint('🔍 [OrderDetailsPage] INICIANDO _loadCachedMessages');
+    debugPrint('🔍 [OrderDetailsPage] OrderId: ${widget.order.id}');
+    debugPrint('🔍 [OrderDetailsPage] ========================================');
+    
     final authState = Provider.of<AuthState>(context, listen: false);
     
-    // � 1. Carregar cache local PRIMEIRO (tem mensagens recebidas via Pusher)
+    // 📦 1. Carregar cache local PRIMEIRO (tem mensagens recebidas via Pusher)
     final cachedMessages = await ChatService.getCachedMessages(widget.order.id);
     final Map<String, ChatMessage> allMessages = {};
     
@@ -91,26 +99,66 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> with WidgetsBinding
       try {
         final userId = authState.currentUser?.uid ?? '';
         
+        debugPrint('🔄 [OrderDetailsPage] Token presente: ${authState.jwtToken!.substring(0, 20)}...');
+        debugPrint('🔄 [OrderDetailsPage] UserId: $userId');
         debugPrint('🔄 [OrderDetailsPage] Buscando mensagens do backend...');
+        
         final backendMessages = await ChatService.loadMessagesFromBackend(
           orderId: widget.order.id,
           authToken: authState.jwtToken!,
           currentUserId: userId,
         );
         
+        debugPrint('🌐 [OrderDetailsPage] Backend retornou ${backendMessages.length} mensagens');
+        
         // Adicionar mensagens do backend ao mapa (sobrescreve duplicatas)
         for (var msg in backendMessages) {
           final key = '${msg.timestamp.millisecondsSinceEpoch}_${msg.message}_${msg.user}';
           allMessages[key] = msg;
         }
-        debugPrint('🌐 [OrderDetailsPage] ${backendMessages.length} mensagens do backend');
+        
+        // 🔥 3. FALLBACK: Se backend não retornou nada, tentar buscar direto do Firebase
+        if (backendMessages.isEmpty) {
+          debugPrint('⚠️ [OrderDetailsPage] Backend vazio, tentando Firebase direto...');
+          try {
+            final firebaseMessages = await _loadDirectFromFirebase(userId);
+            debugPrint('🔥 [OrderDetailsPage] Firebase retornou ${firebaseMessages.length} mensagens');
+            
+            for (var msg in firebaseMessages) {
+              final key = '${msg.timestamp.millisecondsSinceEpoch}_${msg.message}_${msg.user}';
+              allMessages[key] = msg;
+            }
+          } catch (e) {
+            debugPrint('❌ [OrderDetailsPage] Erro ao buscar do Firebase: $e');
+          }
+        }
       } catch (e) {
         debugPrint('⚠️ [OrderDetailsPage] Erro ao carregar do backend: $e');
-        // Continuar com cache apenas
+        
+        // 🔥 FALLBACK: Tentar Firebase direto
+        try {
+          final userId = authState.currentUser?.uid ?? '';
+          debugPrint('🔥 [OrderDetailsPage] Tentando fallback para Firebase...');
+          final firebaseMessages = await _loadDirectFromFirebase(userId);
+          debugPrint('🔥 [OrderDetailsPage] Firebase retornou ${firebaseMessages.length} mensagens');
+          
+          for (var msg in firebaseMessages) {
+            final key = '${msg.timestamp.millisecondsSinceEpoch}_${msg.message}_${msg.user}';
+            allMessages[key] = msg;
+          }
+        } catch (e) {
+          debugPrint('❌ [OrderDetailsPage] Erro no fallback Firebase: $e');
+        }
       }
+    } else {
+      debugPrint('⚠️ [OrderDetailsPage] Token ou usuário ausente');
+      debugPrint('   Token: ${authState.jwtToken != null}');
+      debugPrint('   User: ${authState.currentUser != null}');
     }
     
-    // 3. Atualizar UI com mensagens mescladas
+    // 4. Atualizar UI com mensagens mescladas
+    debugPrint('📊 [OrderDetailsPage] Total de mensagens mescladas: ${allMessages.length}');
+    
     if (allMessages.isNotEmpty && mounted) {
       final sortedMessages = allMessages.values.toList()
         ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
@@ -119,9 +167,36 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> with WidgetsBinding
         _messages.clear();
         _messages.addAll(sortedMessages);
       });
-      debugPrint('✅ [OrderDetailsPage] ${_messages.length} mensagens TOTAL (mescladas)');
+      debugPrint('✅ [OrderDetailsPage] ${_messages.length} mensagens TOTAL carregadas na UI');
       _scrollToBottom();
+    } else {
+      debugPrint('⚠️ [OrderDetailsPage] Nenhuma mensagem para exibir');
     }
+  }
+
+  /// 🔥 Buscar mensagens diretamente do Firebase (fallback)
+  Future<List<ChatMessage>> _loadDirectFromFirebase(String userId) async {
+    final snapshot = await FirebaseFirestore.instance
+        .collection('orders')
+        .doc(widget.order.id)
+        .collection('messages')
+        .orderBy('timestamp', descending: false)
+        .get();
+    
+    final messages = <ChatMessage>[];
+    
+    for (var doc in snapshot.docs) {
+      try {
+        final data = doc.data();
+        final messageSenderId = data['userId'] ?? data['senderId'] ?? '';
+        final message = ChatMessage.fromMap(data, isMe: messageSenderId == userId);
+        messages.add(message);
+      } catch (e) {
+        debugPrint('⚠️ [OrderDetailsPage] Erro ao parsear mensagem Firebase: $e');
+      }
+    }
+    
+    return messages;
   }
 
   /// ✅ Escutar mudanças no status do pedido em tempo real

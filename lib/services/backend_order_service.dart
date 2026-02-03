@@ -168,12 +168,13 @@ class BackendOrderService {
   Future<List<Map<String, dynamic>>> getChatMessages({
     required String token,
     required String orderId,
+    int limit = 100, // ✅ Adicionar parâmetro limit (padrão 100)
   }) async {
     try {
-      debugPrint('💬 [BackendOrderService] Buscando mensagens do pedido $orderId...');
+      debugPrint('💬 [BackendOrderService] Buscando mensagens do pedido $orderId (limit: $limit)...');
 
       final response = await http.get(
-        Uri.parse('$apiUrl/api/orders/$orderId/messages'),
+        Uri.parse('$apiUrl/api/orders/$orderId/messages?limit=$limit'), // ✅ Adicionar query parameter
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
@@ -183,31 +184,58 @@ class BackendOrderService {
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         
-        // Backend pode retornar { messages: [...] } ou diretamente [...]
-        if (data is Map && data.containsKey('messages')) {
-          final messages = List<Map<String, dynamic>>.from(data['messages']);
-          debugPrint('✅ [BackendOrderService] ${messages.length} mensagens carregadas');
-          return messages;
+        debugPrint('💬 [BackendOrderService] Resposta recebida: ${data.runtimeType}');
+        
+        // Backend pode retornar { success: true, messages: [...] } ou { messages: [...] } ou diretamente [...]
+        List<Map<String, dynamic>> messages = [];
+        
+        if (data is Map) {
+          if (data.containsKey('messages')) {
+            messages = List<Map<String, dynamic>>.from(data['messages']);
+          } else if (data.containsKey('data')) {
+            // Possível estrutura: { success: true, data: { messages: [...] } }
+            final dataObj = data['data'];
+            if (dataObj is Map && dataObj.containsKey('messages')) {
+              messages = List<Map<String, dynamic>>.from(dataObj['messages']);
+            } else if (dataObj is List) {
+              messages = List<Map<String, dynamic>>.from(dataObj);
+            }
+          }
         } else if (data is List) {
-          final messages = List<Map<String, dynamic>>.from(data);
-          debugPrint('✅ [BackendOrderService] ${messages.length} mensagens carregadas');
-          return messages;
-        } else {
-          debugPrint('⚠️ [BackendOrderService] Formato de resposta inesperado');
-          return [];
+          messages = List<Map<String, dynamic>>.from(data);
         }
+        
+        debugPrint('✅ [BackendOrderService] ${messages.length} mensagens carregadas do Firebase');
+        
+        // ✅ Debug: Mostrar primeiras 3 mensagens
+        if (messages.isNotEmpty) {
+          final preview = messages.take(3).map((m) => 
+            '${m['senderName']}: ${m['message']} (${m['timestamp']})'
+          ).join('\n  ');
+          debugPrint('📝 [BackendOrderService] Preview:\n  $preview');
+        }
+        
+        return messages;
       } else if (response.statusCode == 404) {
         // Pedido sem mensagens ainda
-        debugPrint('💬 [BackendOrderService] Nenhuma mensagem encontrada');
+        debugPrint('💬 [BackendOrderService] Nenhuma mensagem encontrada (404)');
         return [];
       } else {
-        final errorBody = json.decode(response.body);
-        final errorMessage = errorBody['message'] ?? errorBody['error'] ?? 'Erro desconhecido';
-        debugPrint('❌ [BackendOrderService] Erro ao buscar mensagens: $errorMessage');
-        throw Exception(errorMessage);
+        debugPrint('❌ [BackendOrderService] Status code: ${response.statusCode}');
+        debugPrint('❌ [BackendOrderService] Response body: ${response.body}');
+        
+        try {
+          final errorBody = json.decode(response.body);
+          final errorMessage = errorBody['message'] ?? errorBody['error'] ?? 'Erro desconhecido';
+          debugPrint('❌ [BackendOrderService] Erro ao buscar mensagens: $errorMessage');
+          throw Exception(errorMessage);
+        } catch (e) {
+          throw Exception('Erro ao buscar mensagens: ${response.statusCode} - ${response.body}');
+        }
       }
     } catch (e) {
       debugPrint('❌ [BackendOrderService] Exceção ao buscar mensagens: $e');
+      debugPrint('❌ [BackendOrderService] Stack trace: ${StackTrace.current}');
       // Não falhar se backend não tiver endpoint ainda, retornar lista vazia
       return [];
     }

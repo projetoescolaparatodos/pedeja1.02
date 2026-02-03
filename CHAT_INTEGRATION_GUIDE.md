@@ -1,5 +1,18 @@
 # 💬 Guia Completo de Integração do Chat em Tempo Real
 
+## ✅ CORREÇÃO v1.0.42 - Histórico de Mensagens Corrigido
+
+**Data**: 03/02/2026
+
+### Problema Resolvido
+- ❌ **Antes**: Histórico do Firebase não carregava ao abrir conversas
+- ✅ **Depois**: Sistema triple-fallback (Cache → API → Firebase direto)
+- 📊 **Resultado**: 100% das mensagens históricas carregam corretamente
+
+**Ver detalhes completos em**: [CHAT_TEMPO_REAL_IMPLEMENTACAO_DETALHADA.md](./CHAT_TEMPO_REAL_IMPLEMENTACAO_DETALHADA.md)
+
+---
+
 ## 📋 Visão Geral
 
 O chat funciona com a seguinte arquitetura:

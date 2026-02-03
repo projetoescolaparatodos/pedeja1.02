@@ -1,21 +1,22 @@
 # 📱 PedeJá - Documentação Completa do Projeto
 
-> **Última Atualização**: 10 de Janeiro de 2026  
-> **Versão Atual**: 1.0.37+37  
+> **Última Atualização**: 03 de Fevereiro de 2026  
+> **Versão Atual**: 1.0.42+42  
 > **Status**: Em Produção
 
 ## 📋 Índice
 1. [Visão Geral](#visão-geral)
 2. [Arquitetura do Sistema](#arquitetura-do-sistema)
 3. [Funcionalidades Principais](#funcionalidades-principais)
-4. [Changelog - Janeiro 2026](#changelog---janeiro-2026)
-5. [Implementações Recentes](#implementações-recentes)
-6. [Correções Críticas de Logout iOS](#correções-críticas-de-logout-ios)
-7. [Backend API](#backend-api)
-8. [Firebase & Autenticação](#firebase--autenticação)
-9. [Estrutura de Código](#estrutura-de-código)
-10. [Guia de Desenvolvimento](#guia-de-desenvolvimento)
-11. [Troubleshooting](#troubleshooting)
+4. [🔧 CORREÇÃO CRÍTICA v1.0.42 - Chat History](#correção-crítica-v1042---chat-history)
+5. [Changelog - Janeiro 2026](#changelog---janeiro-2026)
+6. [Implementações Recentes](#implementações-recentes)
+7. [Correções Críticas de Logout iOS](#correções-críticas-de-logout-ios)
+8. [Backend API](#backend-api)
+9. [Firebase & Autenticação](#firebase--autenticação)
+10. [Estrutura de Código](#estrutura-de-código)
+11. [Guia de Desenvolvimento](#guia-de-desenvolvimento)
+12. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -58,6 +59,98 @@
 - Custom widgets reutilizáveis
 - Animações fluidas (Hero, PageView)
 - Bottom sheets e modals
+
+---
+
+## 🔧 CORREÇÃO CRÍTICA v1.0.42 - Chat History
+
+**Data**: 03 de Fevereiro de 2026
+
+### ❌ Problema Crítico
+O histórico de mensagens do chat **NÃO** carregava ao abrir conversas existentes:
+- ✅ Mensagens em tempo real (Pusher) funcionavam perfeitamente
+- ❌ Histórico armazenado no Firebase **NÃO** aparecia
+- Usuários viam apenas mensagens recebidas enquanto o chat estava aberto
+
+### 🔍 Root Cause
+A função `_loadCachedMessages()` estava definida em `order_details_page.dart` mas **NUNCA ERA CHAMADA** no `initState()`.
+
+### ✅ Solução Implementada
+
+**1. Chamada no initState():**
+```dart
+@override
+void initState() {
+  super.initState();
+  _loadCachedMessages(); // ← CRÍTICO: Adicionado
+  _listenToOrderChanges();
+  _setupFirebaseMessagesListener();
+  _initializeChatService();
+}
+```
+
+**2. Triple-Fallback System (Cache → API → Firebase):**
+```dart
+Future<void> _loadCachedMessages() async {
+  // 1️⃣ Tenta cache local (SharedPreferences + Memory)
+  final cachedMessages = _chatService.getCachedMessages(widget.order.id);
+  
+  // 2️⃣ Busca no backend API
+  final backendMessages = await _chatService.loadMessagesFromBackend(
+    widget.order.id, 
+    currentUserId
+  );
+  
+  // 3️⃣ Fallback direto para Firebase se API falhar
+  if (backendMessages.isEmpty && token.isNotEmpty) {
+    final firebaseMessages = await _loadDirectFromFirebase(currentUserId);
+    allMessages.addAll(firebaseMessages);
+  }
+}
+```
+
+**3. Logs Detalhados para Debugging:**
+- 🔍 Mostra token, userId e contadores em cada etapa
+- 💾 Exibe mensagens do cache local
+- 🔄 Logs de requisição ao backend
+- 🌐 Preview de mensagens retornadas (primeiras 3)
+- 🔥 Trigger de fallback para Firebase direto
+- ✅ Total final carregado na UI
+
+### 📊 Resultado Validado
+
+**Teste**: Pedido `cF4QrXeCXW0Db0n5adAm` com 7 mensagens históricas
+```
+🔍 [OrderDetailsPage] INICIANDO _loadCachedMessages
+💾 [OrderDetailsPage] 0 mensagens do cache local
+🔄 [OrderDetailsPage] Buscando mensagens do backend...
+ [Firebase] Recebeu 7 mensagens (snapshot changes: 7)
+✅ [BackendOrderService] 7 mensagens carregadas do Firebase
+🌐 [OrderDetailsPage] Backend retornou 7 mensagens
+📊 [OrderDetailsPage] Total de mensagens mescladas: 7
+✅ [OrderDetailsPage] 7 mensagens TOTAL carregadas na UI
+```
+
+### 📁 Arquivos Modificados
+
+**`lib/pages/orders/order_details_page.dart`**:
+- ✅ Adicionada chamada `_loadCachedMessages()` no `initState()`
+- ✅ Reescrita completa de `_loadCachedMessages()` com triple-fallback
+- ✅ Novo método `_loadDirectFromFirebase()` para fallback
+- ✅ Logs detalhados em cada etapa (🔍💾🔄🌐🔥📊✅)
+
+**`lib/services/chat_service.dart`**:
+- ✅ Enhanced `loadMessagesFromBackend()` com debugging
+- ✅ Duplicate prevention no cache
+- ✅ Logging da estrutura da primeira mensagem
+
+**`lib/services/backend_order_service.dart`**:
+- ✅ Adicionado parâmetro `limit=100` ao endpoint
+- ✅ Parsing robusto de múltiplos formatos de resposta
+- ✅ Preview das primeiras 3 mensagens nos logs
+
+### 📚 Documentação Completa
+Ver: [CHAT_TEMPO_REAL_IMPLEMENTACAO_DETALHADA.md](./CHAT_TEMPO_REAL_IMPLEMENTACAO_DETALHADA.md)
 
 ---
 

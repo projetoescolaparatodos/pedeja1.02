@@ -71,24 +71,35 @@ class CatalogProvider extends ChangeNotifier {
   bool get perfumeryProductsLoading => _perfumeryProductsLoading;
   String? get perfumeryProductsError => _perfumeryProductsError;
 
+  // PRODUTOS DE AÇOUGUE
+  List<ProductModel> _meatsProducts = [];
+  bool _meatsProductsLoading = false;
+  String? _meatsProductsError;
+
+  List<ProductModel> get meatsProducts => _meatsProducts;
+  bool get meatsProductsLoading => _meatsProductsLoading;
+  String? get meatsProductsError => _meatsProductsError;
+
   // COMPATIBILIDADE: Mantém randomProducts como união de todas as listas
-  @Deprecated('Use featuredProducts, pharmacyProducts, marketProducts, drinksProducts, personalCareProducts ou perfumeryProducts')
+  @Deprecated('Use featuredProducts, pharmacyProducts, marketProducts, drinksProducts, personalCareProducts, perfumeryProducts ou meatsProducts')
   List<ProductModel> get randomProducts => [
     ..._featuredProducts,
     ..._drinksProducts,
     ..._pharmacyProducts,
     ..._personalCareProducts,
     ..._marketProducts,
+    ..._meatsProducts,
     ..._perfumeryProducts,
   ];
 
-  @Deprecated('Use featuredProductsLoading, pharmacyProductsLoading, marketProductsLoading, drinksProductsLoading, personalCareProductsLoading ou perfumeryProductsLoading')
+  @Deprecated('Use featuredProductsLoading, pharmacyProductsLoading, marketProductsLoading, drinksProductsLoading, personalCareProductsLoading, perfumeryProductsLoading ou meatsProductsLoading')
   bool get randomProductsLoading => 
     _featuredProductsLoading || 
     _drinksProductsLoading || 
     _pharmacyProductsLoading || 
     _personalCareProductsLoading || 
     _marketProductsLoading ||
+    _meatsProductsLoading ||
     _perfumeryProductsLoading;
 
   @Deprecated('Use featuredProductsError, pharmacyProductsError ou marketProductsError')
@@ -105,14 +116,14 @@ class CatalogProvider extends ChangeNotifier {
   String get searchQuery => _searchQuery;
 
   CatalogProvider() {
-    // Inicia o timer de refresh automático a cada 5 minutos
+    // Inicia o timer de refresh automático a cada 1 hora
     _startAutoRefresh();
   }
 
   void _startAutoRefresh() {
     _refreshTimer?.cancel();
-    _refreshTimer = Timer.periodic(const Duration(minutes: 5), (_) {
-      debugPrint('🔄 [CatalogProvider] Auto-refresh ativado (5min)');
+    _refreshTimer = Timer.periodic(const Duration(hours: 1), (_) {
+      debugPrint('🔄 [CatalogProvider] Auto-refresh ativado (1 hora)');
       // Recarrega restaurantes e produtos silenciosamente para atualizar status
       _silentRefreshRestaurants();
       _silentRefreshProducts();
@@ -130,8 +141,12 @@ class CatalogProvider extends ChangeNotifier {
       if (response.statusCode == 200) {
         final List<dynamic> data = json.decode(response.body);
         _restaurants = data.map((json) => RestaurantModel.fromJson(json)).toList();
+        
+        // 🎲 Shuffle local (personalizado por usuário)
+        _restaurants.shuffle();
+        
         notifyListeners(); // Notifica listeners para atualizar UI
-        debugPrint('✅ [CatalogProvider] Restaurantes atualizados automaticamente');
+        debugPrint('✅ [CatalogProvider] Restaurantes atualizados automaticamente e embaralhados');
       }
     } catch (error) {
       debugPrint('❌ [CatalogProvider] Erro no auto-refresh: $error');
@@ -147,6 +162,7 @@ class CatalogProvider extends ChangeNotifier {
       loadPharmacyProducts(force: true),
       loadPersonalCareProducts(force: true),
       loadMarketProducts(force: true),
+      loadMeatsProducts(force: true),
       loadPerfumeryProducts(force: true),
     ]);
   }
@@ -202,7 +218,12 @@ class CatalogProvider extends ChangeNotifier {
       if (response.statusCode == 200) {
         final List<dynamic> data = json.decode(response.body);
         _restaurants = data.map((json) => RestaurantModel.fromJson(json)).toList();
+        
+        // 🎲 Shuffle local (personalizado por usuário)
+        _restaurants.shuffle();
+        
         _restaurantsError = null;
+        debugPrint('✅ [CatalogProvider] ${_restaurants.length} restaurantes carregados e embaralhados!');
       } else {
         _restaurantsError = 'Erro ao carregar restaurantes: ${response.statusCode}';
       }
@@ -423,6 +444,73 @@ class CatalogProvider extends ChangeNotifier {
     }
   }
 
+  /// Carrega produtos de açougue da API
+  Future<void> loadMeatsProducts({bool force = false}) async {
+    if (!force && _meatsProducts.isNotEmpty) {
+      debugPrint('✅ [CatalogProvider] Produtos de açougue já carregados (${_meatsProducts.length} produtos)');
+      return;
+    }
+
+    if (_meatsProductsLoading) return;
+
+    debugPrint('🚀 [CatalogProvider] Carregando TODOS os produtos de açougue...');
+
+    _meatsProductsLoading = true;
+    _meatsProductsError = null;
+    notifyListeners();
+
+    try {
+      final url = Uri.parse('https://api-pedeja.vercel.app/api/products/meats');
+
+      debugPrint('📡 [CatalogProvider] URL Açougue: $url');
+
+      final response = await http.get(url, headers: {'Content-Type': 'application/json'});
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final total = data['total'] ?? 0;
+        debugPrint('🔍 [Backend Response Açougue] success: ${data['success']}, total: $total');
+
+        if (data['success'] == true && data['data'] != null) {
+          final List<dynamic> productsJson = data['data'];
+          
+          debugPrint('📦 [CatalogProvider] Produtos de açougue recebidos: ${productsJson.length}');
+
+          final products = productsJson.map((json) => ProductModel.fromJson(json)).toList();
+
+          // 🎲 Shuffle local (personalizado por usuário)
+          products.shuffle();
+
+          // Extrai categorias
+          for (var product in products) {
+            if (product.category != null && product.category!.isNotEmpty) {
+              _availableCategories.add(product.category!);
+            }
+          }
+
+          _meatsProducts = products;
+          _meatsProductsError = null;
+          debugPrint('✅ [CatalogProvider] ${_meatsProducts.length} produtos de açougue carregados e embaralhados!');
+        } else {
+          _meatsProductsError = 'API retornou success=false';
+        }
+      } else {
+        _meatsProductsError = 'Erro ao carregar: ${response.statusCode}';
+      }
+    } catch (error) {
+      debugPrint('❌ [CatalogProvider] Erro produtos de açougue: $error');
+      if (error.toString().contains('SocketException') ||
+          error.toString().contains('Failed host lookup')) {
+        _meatsProductsError = 'Sem conexão com a internet';
+      } else {
+        _meatsProductsError = 'Erro ao carregar produtos';
+      }
+    } finally {
+      _meatsProductsLoading = false;
+      notifyListeners();
+    }
+  }
+
   /// Carrega produtos de bebidas da API
   Future<void> loadDrinksProducts({bool force = false}) async {
     if (!force && _drinksProducts.isNotEmpty) {
@@ -625,7 +713,7 @@ class CatalogProvider extends ChangeNotifier {
   }
 
   /// COMPATIBILIDADE: Mantém método antigo mas chama todos os novos
-  @Deprecated('Use loadFeaturedProducts, loadDrinksProducts, loadPharmacyProducts, loadPersonalCareProducts, loadMarketProducts e loadPerfumeryProducts')
+  @Deprecated('Use loadFeaturedProducts, loadDrinksProducts, loadPharmacyProducts, loadPersonalCareProducts, loadMarketProducts, loadMeatsProducts e loadPerfumeryProducts')
   Future<void> loadRandomProducts({bool force = false}) async {
     await Future.wait([
       loadFeaturedProducts(force: force),
@@ -633,6 +721,7 @@ class CatalogProvider extends ChangeNotifier {
       loadPharmacyProducts(force: force),
       loadPersonalCareProducts(force: force),
       loadMarketProducts(force: force),
+      loadMeatsProducts(force: force),
       loadPerfumeryProducts(force: force),
     ]);
   }

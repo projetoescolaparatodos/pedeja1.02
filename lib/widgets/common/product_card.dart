@@ -33,11 +33,8 @@ class ProductCard extends StatelessWidget {
       child: Container(
         decoration: BoxDecoration(
           border: Border.all(
-            // 🍕 Borda branca se tiver adicionais avançados, dourada normal caso contrário
-            color: product.useAdvancedToppings 
-                ? Colors.white // Branco
-                : const Color(0xFFE39110), // Dourado normal
-            width: 1, // Mesma espessura para ambos
+            color: const Color(0xFFE39110), // Dourado para todos
+            width: 1,
           ),
           borderRadius: BorderRadius.circular(16),
         ),
@@ -84,8 +81,8 @@ class ProductCard extends StatelessWidget {
                       // Configurações para melhorar carregamento em release
                       maxWidthDiskCache: 800,
                       maxHeightDiskCache: 800,
-                      memCacheWidth: 400,
-                      memCacheHeight: 400,
+                      memCacheWidth: 300,
+                      memCacheHeight: 300,
                     )
                   : Container(
                       color: const Color(0xFF022E28),
@@ -128,10 +125,7 @@ class ProductCard extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: const Color(0xFF0D3B3B), // Verde escuro
                     border: Border.all(
-                      // 🍕 Borda branca se produto tem adicionais avançados
-                      color: product.useAdvancedToppings
-                          ? Colors.white // Branco
-                          : const Color(0xFFE39110), // Dourado normal
+                      color: const Color(0xFFE39110), // Dourado para todos
                       width: 1,
                     ),
                     borderRadius: BorderRadius.circular(8),
@@ -158,7 +152,7 @@ class ProductCard extends StatelessWidget {
                     color: const Color(0xFF0D3B3B), // Fundo verde escuro
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: Colors.white, // Borda branca
+                      color: const Color(0xFFE39110), // Borda dourada
                       width: 2.5,
                     ),
                     boxShadow: [
@@ -171,7 +165,7 @@ class ProductCard extends StatelessWidget {
                   ),
                   child: const Icon(
                     Icons.extension,
-                    color: Colors.white, // Ícone branco
+                    color: Color(0xFFE39110), // Ícone dourado
                     size: 22,
                   ),
                 ),

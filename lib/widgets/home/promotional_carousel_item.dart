@@ -166,6 +166,8 @@ class PromotionalCarouselItemState extends State<PromotionalCarouselItem> {
       return CachedNetworkImage(
         imageUrl: widget.promotion.mediaUrl,
         fit: BoxFit.cover,
+        memCacheWidth: 600,
+        memCacheHeight: 400,
         placeholder: (context, url) => Container(
           color: Colors.grey[800],
           child: const Center(child: CircularProgressIndicator()),

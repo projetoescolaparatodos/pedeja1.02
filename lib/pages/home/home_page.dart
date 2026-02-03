@@ -50,6 +50,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   String _selectedCategoryPharmacy = 'Todos';
   String _selectedCategoryPersonalCare = 'Todos';
   String _selectedCategoryMarket = 'Todos';
+  String _selectedCategoryMeats = 'Todos';
   String _selectedCategoryPerfumery = 'Todos';
 
   // Allowed categories per section (normalized)
@@ -77,6 +78,20 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   final Set<String> _marketAllowed = {
     'todos',
     'mercearia', 'higiene', 'varejinho', 'material para churrasco', 'limpeza', 'congelados'
+  };
+
+  // GlobalKeys para scroll preciso
+  final GlobalKey _featuredKey = GlobalKey();
+  final GlobalKey _drinksKey = GlobalKey();
+  final GlobalKey _meatsKey = GlobalKey();
+  final GlobalKey _pharmacyKey = GlobalKey();
+  final GlobalKey _personalCareKey = GlobalKey();
+  final GlobalKey _marketKey = GlobalKey();
+  final GlobalKey _perfumeryKey = GlobalKey();
+
+  final Set<String> _meatsAllowed = {
+    'todos',
+    'carnes', 'carne', 'acougue', 'açougue'
   };
 
   final Set<String> _perfumeryAllowed = {
@@ -117,11 +132,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
     // ⚡ Carregar dados do catálogo em paralelo
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      debugPrint('🚀 [HomePage] Iniciando carregamento das 6 seções...');
+      debugPrint('🚀 [HomePage] Iniciando carregamento das 7 seções...');
       final catalog = context.read<CatalogProvider>();
       
       try {
-        // Carregar 6 seções em paralelo para economizar tempo
+        // Carregar 7 seções em paralelo para economizar tempo
         await Future.wait([
           catalog.loadRestaurants(),
           catalog.loadFeaturedProducts(),
@@ -129,9 +144,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           catalog.loadPharmacyProducts(),
           catalog.loadPersonalCareProducts(),
           catalog.loadMarketProducts(),
+          catalog.loadMeatsProducts(),
           catalog.loadPerfumeryProducts(),
         ]);
-        debugPrint('✅ [HomePage] 6 seções carregadas com sucesso!');
+        debugPrint('✅ [HomePage] 7 seções carregadas com sucesso!');
       } catch (e) {
         debugPrint('❌ [HomePage] Erro ao carregar seções: $e');
       }
@@ -339,6 +355,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       ...catalog.pharmacyProducts,
       ...catalog.personalCareProducts,
       ...catalog.marketProducts,
+      ...catalog.meatsProducts,
       ...catalog.perfumeryProducts,
     ];
     
@@ -616,6 +633,48 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     return result;
   }
 
+  /// ✅ Filtrar produtos de açougue pela busca
+  /// Retorna Map<ProductModel, String?> onde String? é o nome da marca que deu match
+  Map<dynamic, String?> _filterMeatsProducts(List<dynamic> products) {
+    if (_searchQuery.isEmpty) {
+      return {for (var p in products) p: null};
+    }
+    
+    final result = <dynamic, String?>{};
+    final query = _searchQuery;
+    
+    for (var p in products) {
+      String? matchedBrandName;
+      
+      if (p.brands != null && (p.brands as List).isNotEmpty) {
+        for (var brand in p.brands) {
+          final brandName = brand.brandName ?? '';
+          if (_normalizeText(brandName).contains(query)) {
+            matchedBrandName = brandName;
+            result[p] = matchedBrandName;
+            break;
+          }
+        }
+      }
+      
+      if (matchedBrandName != null) continue;
+      
+      final badges = p.badges as List<dynamic>? ?? [];
+      final badgesText = badges
+          .map((badge) => _normalizeText(badge.toString().replaceAll('_', ' ')))
+          .join(' ');
+      
+      if (_normalizeText(p.name ?? '').contains(query) ||
+          _normalizeText(p.description ?? '').contains(query) ||
+          _normalizeText(p.category ?? '').contains(query) ||
+          badgesText.contains(query)) {
+        result[p] = null;
+      }
+    }
+    
+    return result;
+  }
+
   /// Scroll suave para o topo da página
   void _scrollToTop() {
     _scrollController.animateTo(
@@ -625,36 +684,42 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     );
   }
 
-  /// Scroll suave para uma seção específica (0=Destaque, 1=Bebidas, 2=Farmácia, 3=Cuidados Pessoais, 4=Mercado, 5=Perfumaria)
+  /// Scroll preciso para uma seção específica usando GlobalKeys
   void _scrollToSection(int section) {
-    // Estimativas de posição (ajuste conforme necessário)
-    double targetOffset = 0;
+    GlobalKey? targetKey;
+    
     switch (section) {
       case 0: // Produtos em Destaque
-        targetOffset = 900;
+        targetKey = _featuredKey;
         break;
       case 1: // Bebidas
-        targetOffset = 1300;
+        targetKey = _drinksKey;
         break;
-      case 2: // Farmácia
-        targetOffset = 1800;
+      case 2: // Açougue
+        targetKey = _meatsKey;
         break;
-      case 3: // Cuidados Pessoais
-        targetOffset = 2300;
+      case 3: // Farmácia
+        targetKey = _pharmacyKey;
         break;
-      case 4: // Mercado
-        targetOffset = 2800;
+      case 4: // Cuidados Pessoais
+        targetKey = _personalCareKey;
         break;
-      case 5: // Perfumaria
-        targetOffset = 3300;
+      case 5: // Mercado
+        targetKey = _marketKey;
+        break;
+      case 6: // Perfumaria
+        targetKey = _perfumeryKey;
         break;
     }
     
-    _scrollController.animateTo(
-      targetOffset,
-      duration: const Duration(milliseconds: 800),
-      curve: Curves.easeInOut,
-    );
+    if (targetKey?.currentContext != null) {
+      Scrollable.ensureVisible(
+        targetKey!.currentContext!,
+        duration: const Duration(milliseconds: 800),
+        curve: Curves.easeInOut,
+        alignment: 0.0, // 0.0 = topo da tela
+      );
+    }
   }
 
   @override
@@ -704,6 +769,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 
                 // Produtos em Destaque
                 SliverToBoxAdapter(
+                  key: _featuredKey,
                   child: _buildProdutosEmDestaque(),
                 ),
                 
@@ -713,7 +779,18 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 
                 // Bebidas
                 SliverToBoxAdapter(
+                  key: _drinksKey,
                   child: _buildBebidas(),
+                ),
+                
+                const SliverToBoxAdapter(
+                  child: SizedBox(height: 16),
+                ),
+                
+                // Açougue
+                SliverToBoxAdapter(
+                  key: _meatsKey,
+                  child: _buildAcougue(),
                 ),
                 
                 const SliverToBoxAdapter(
@@ -722,6 +799,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 
                 // Farmácia
                 SliverToBoxAdapter(
+                  key: _pharmacyKey,
                   child: _buildFarmacia(),
                 ),
                 
@@ -731,6 +809,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 
                 // Cuidados Pessoais
                 SliverToBoxAdapter(
+                  key: _personalCareKey,
                   child: _buildCuidadosPessoais(),
                 ),
                 
@@ -740,6 +819,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 
                 // Mercado
                 SliverToBoxAdapter(
+                  key: _marketKey,
                   child: _buildMercado(),
                 ),
                 
@@ -749,6 +829,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 
                 // Perfumaria
                 SliverToBoxAdapter(
+                  key: _perfumeryKey,
                   child: _buildPerfumaria(),
                 ),
                 
@@ -1895,6 +1976,172 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     );
   }
 
+  Widget _buildAcougue() {
+    return Consumer<CatalogProvider>(
+      builder: (context, catalog, child) {
+        final meatsProducts = catalog.meatsProducts;
+
+        final searchFilteredMap = _filterMeatsProducts(meatsProducts);
+
+        final filteredMap = _selectedCategoryMeats == 'Todos'
+            ? searchFilteredMap
+            : Map.fromEntries(
+                searchFilteredMap.entries.where(
+                  (entry) => entry.key.category == _selectedCategoryMeats
+                )
+              );
+
+        if (_searchQuery.isNotEmpty && filteredMap.isEmpty) {
+          return const SizedBox.shrink();
+        }
+
+        if (meatsProducts.isEmpty && !catalog.meatsProductsLoading) {
+          return const SizedBox.shrink();
+        }
+
+        final categoriesForSection = catalog.availableCategories
+            .where((c) => _meatsAllowed.contains(_normalizeText(c)))
+            .toList();
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                children: [
+                  Text('🥩', style: TextStyle(fontSize: 28)),
+                  SizedBox(width: 8),
+                  Text(
+                    'Açougue',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            if (categoriesForSection.isNotEmpty)
+              SizedBox(
+                height: 48,
+                child: ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  scrollDirection: Axis.horizontal,
+                  itemCount: categoriesForSection.length,
+                  itemBuilder: (context, index) {
+                    final category = categoriesForSection[index];
+                    final isSelected = _selectedCategoryMeats == category;
+
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: FilterChip(
+                        selected: isSelected,
+                        label: Text(category),
+                        onSelected: (selected) {
+                          setState(() {
+                            _selectedCategoryMeats = category;
+                          });
+                        },
+                        backgroundColor: const Color(0xFF033D35),
+                        selectedColor: const Color(0xFF74241F),
+                        labelStyle: TextStyle(
+                          color: isSelected ? Colors.white : const Color(0xFFE39110),
+                          fontWeight: FontWeight.w500,
+                        ),
+                        side: const BorderSide(
+                          color: Color(0xFFE39110),
+                          width: 1,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+
+            const SizedBox(height: 16),
+
+            if (catalog.meatsProductsLoading)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(32),
+                  child: CircularProgressIndicator(
+                    color: Color(0xFFE39110),
+                  ),
+                ),
+              )
+            
+            else if (catalog.meatsProductsError != null)
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(32),
+                  child: Column(
+                    children: [
+                      const Icon(
+                        Icons.error_outline,
+                        size: 64,
+                        color: Color(0xFFE39110),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        catalog.meatsProductsError!,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: Colors.white70),
+                      ),
+                      const SizedBox(height: 16),
+                      ElevatedButton.icon(
+                        onPressed: () {
+                          catalog.loadMeatsProducts(force: true);
+                        },
+                        icon: const Icon(Icons.refresh),
+                        label: const Text('Tentar Novamente'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF74241F),
+                          foregroundColor: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            
+            else if (filteredMap.isEmpty)
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(32),
+                  child: Column(
+                    children: [
+                      const Icon(
+                        Icons.search_off,
+                        size: 64,
+                        color: Color(0xFFE39110),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        _searchQuery.isNotEmpty 
+                            ? 'Nenhum produto encontrado para "$_searchQuery"'
+                            : 'Nenhum produto encontrado',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontSize: 16, color: Colors.white70),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            else
+              _buildProductCarousel(filteredMap, catalog),
+          ],
+        );
+      },
+    );
+  }
+
   Widget _buildPerfumaria() {
     return Consumer<CatalogProvider>(
       builder: (context, catalog, child) {
@@ -2538,13 +2785,23 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         },
                       ),
                     // 🐴 Botão só aparece se houver produtos (Operação Cavalo de Troia)
+                    if (catalog.meatsProducts.isNotEmpty)
+                      _buildDrawerItem(
+                        icon: Icons.restaurant,
+                        title: 'Açougue',
+                        onTap: () {
+                          Navigator.pop(context);
+                          _scrollToSection(2);
+                        },
+                      ),
+                    // 🐴 Botão só aparece se houver produtos (Operação Cavalo de Troia)
                     if (catalog.pharmacyProducts.isNotEmpty)
                       _buildDrawerItem(
                         icon: Icons.local_pharmacy,
                         title: 'Farmácia',
                         onTap: () {
                           Navigator.pop(context);
-                          _scrollToSection(2);
+                          _scrollToSection(3);
                         },
                       ),
                     // 🐴 Botão só aparece se houver produtos (Operação Cavalo de Troia)
@@ -2554,7 +2811,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         title: 'Cuidados Pessoais',
                         onTap: () {
                           Navigator.pop(context);
-                          _scrollToSection(3);
+                          _scrollToSection(4);
                         },
                       ),
                     // 🐴 Botão só aparece se houver produtos (Operação Cavalo de Troia)
@@ -2564,7 +2821,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         title: 'Mercado',
                         onTap: () {
                           Navigator.pop(context);
-                          _scrollToSection(4);
+                          _scrollToSection(5);
                         },
                       ),
                     // 🐴 Botão só aparece se houver produtos (Operação Cavalo de Troia)
@@ -2574,7 +2831,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         title: 'Perfumaria',
                         onTap: () {
                           Navigator.pop(context);
-                          _scrollToSection(5);
+                          _scrollToSection(6);
                         },
                       ),
                     const Divider(color: Color(0xFFE39110), height: 32),

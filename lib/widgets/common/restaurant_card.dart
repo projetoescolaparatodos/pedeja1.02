@@ -168,6 +168,8 @@ class RestaurantCard extends StatelessWidget {
     return CachedNetworkImage(
       imageUrl: imageUrl,
       fit: BoxFit.cover,
+      memCacheWidth: 400,
+      memCacheHeight: 300,
       placeholder: (context, url) => _buildPlaceholder(),
       errorWidget: (context, url, error) => _buildPlaceholder(),
     );

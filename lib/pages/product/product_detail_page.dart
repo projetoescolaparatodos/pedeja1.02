@@ -704,12 +704,12 @@ class _ProductDetailPageState extends State<ProductDetailPage> {
                       right: index < _brands.length - 1 ? 12 : 0,
                     ),
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(20),
                       border: Border.all(
                         color: isSelected
                             ? const Color(0xFFE39110)
                             : const Color(0xFFE39110).withValues(alpha: 0.3),
-                        width: isSelected ? 2 : 1,
+                        width: isSelected ? 1.5 : 1,
                       ),
                       boxShadow: isSelected
                           ? [

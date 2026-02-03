@@ -946,10 +946,74 @@ class CartPage extends StatelessWidget {
       
       if (!context.mounted) return;
       
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('❌ Você precisa fazer login primeiro'),
-          backgroundColor: Color(0xFF74241F),
+      // Mostrar modal de login em vez de SnackBar
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          backgroundColor: const Color(0xFF0D3B3B),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: const BorderSide(color: Color(0xFFE39110), width: 2),
+          ),
+          title: const Row(
+            children: [
+              Icon(Icons.lock_outline, color: Color(0xFFE39110), size: 28),
+              SizedBox(width: 12),
+              Text(
+                'Login Necessário',
+                style: TextStyle(
+                  color: Color(0xFFE39110),
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          content: const Text(
+            'Para fazer pedidos, você precisa criar uma conta ou fazer login com uma conta válida.',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 16,
+              height: 1.5,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text(
+                'Cancelar',
+                style: TextStyle(color: Colors.white70),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context); // Fecha diálogo
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const SignupPage()),
+                );
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFE39110),
+                foregroundColor: const Color(0xFF022E28),
+              ),
+              child: const Text('Criar Conta'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context); // Fecha diálogo
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const LoginPage()),
+                );
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF74241F),
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Fazer Login'),
+            ),
+          ],
         ),
       );
       return;

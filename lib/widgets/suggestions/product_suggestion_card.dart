@@ -145,6 +145,8 @@ class ProductSuggestionCard extends StatelessWidget {
       width: 160,
       height: 220,
       fit: BoxFit.cover,
+      memCacheWidth: 250,
+      memCacheHeight: 330,
       placeholder: (context, url) => Container(
         color: const Color(0xFF0D3B3B).withOpacity(0.6),
         child: const Center(

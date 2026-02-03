@@ -65,4 +65,5 @@
 	</array>
 	<!-- 🔔 Permissões de notificação -->
 	<key>NSUserNotificationUsageDescription</key>
-	<string>Precisamos enviar notificações sobre seus pedidos e mensagens do chat.</string>
+	<string>Precisamos enviar notificações sobre seus pedidos e mensagens do chat.</string>	</dict>
+</plist>
